@@ -77,20 +77,6 @@ ARMCI_Free (void *ptr)
   return rval;
 }
 
-void *
-ARMCI_Memat (armci_meminfo_t * meminfo, int memflg)
-{
-  void *rval;
-  rval = PARMCI_Memat (meminfo, memflg);
-  return rval;
-}
-
-void
-ARMCI_Memget (size_t bytes, armci_meminfo_t * meminfo, int memflg)
-{
-  PARMCI_Memget (bytes, meminfo, memflg);
-}
-
 int
 ARMCI_Test (armci_hdl_t * nb_handle)
 {
@@ -98,7 +84,6 @@ ARMCI_Test (armci_hdl_t * nb_handle)
   rval = PARMCI_Test (nb_handle);
   return rval;
 }
-
 
 int
 ARMCI_Wait (armci_hdl_t * nb_handle)
@@ -162,16 +147,63 @@ ARMCI_Rmw (int op, int *ploc, int *prem, int extra, int proc)
 }
 
 int
-ARMCI_AccV (int op, void *scale, armci_giov_t * darr, int len, int proc)
+ARMCI_Put (void *src, void *dst, int bytes, int proc)
+{
+  int rval;
+  TAU_TRACE_SENDMSG (1, proc, bytes);
+  rval = PARMCI_Put (src, dst, bytes, proc);
+  return rval;
+}
+
+int
+ARMCI_Get (void *src, void *dst, int bytes, int proc)
+{
+  int rval;
+  TAU_TRACE_SENDMSG (1, proc, bytes);
+  rval = PARMCI_Get (src, dst, bytes, proc);
+  return rval;
+}
+
+int
+ARMCI_Acc (int optype, void *scale, void *src, void *dst, int bytes, int proc)
+{
+  int rval;
+  TAU_TRACE_SENDMSG (1, proc, bytes);
+  rval = PARMCI_Acc (optype, scale, src, dst, bytes, proc);
+  return rval;
+}
+
+int
+ARMCI_PutS (void *src_ptr, int *src_stride_arr, void *dst_ptr,
+	    int *dst_stride_arr, int *count, int stride_levels, int proc)
 {
   int rval;
   {
-    int i, bytes = 0;
-    for (i = 0; i < len; i++)
-      bytes += darr[i].ptr_array_len * darr[i].bytes;
+    int i, bytes = 1;
+    for (i = 0; i < stride_levels + 1; i++)
+      bytes *= count[i];
     TAU_TRACE_SENDMSG (1, proc, bytes);
   }
-  rval = PARMCI_AccV (op, scale, darr, len, proc);
+  rval =
+    PARMCI_PutS (src_ptr, src_stride_arr, dst_ptr, dst_stride_arr, count,
+		 stride_levels, proc);
+  return rval;
+}
+
+int
+ARMCI_GetS (void *src_ptr, int *src_stride_arr, void *dst_ptr,
+	    int *dst_stride_arr, int *count, int stride_levels, int proc)
+{
+  int rval;
+  {
+    int i, bytes = 1;
+    for (i = 0; i < stride_levels + 1; i++)
+      bytes *= count[i];
+    TAU_TRACE_SENDMSG (1, proc, bytes);
+  }
+  rval =
+    PARMCI_GetS (src_ptr, src_stride_arr, dst_ptr, dst_stride_arr, count,
+		 stride_levels, proc);
   return rval;
 }
 
@@ -194,12 +226,92 @@ ARMCI_AccS (int optype, void *scale, void *src_ptr, int *src_stride_arr,
 }
 
 int
+ARMCI_PutV (armci_giov_t * darr, int len, int proc)
+{
+  int rval;
+  {
+    int i, bytes = 0;
+    for (i = 0; i < len; i++)
+      bytes += darr[i].ptr_array_len * darr[i].bytes;
+    TAU_TRACE_SENDMSG (1, proc, bytes);
+  }
+  rval = PARMCI_PutV (darr, len, proc);
+  return rval;
+}
+
+int
+ARMCI_GetV (armci_giov_t * darr, int len, int proc)
+{
+  int rval;
+  {
+    int i, bytes = 0;
+    for (i = 0; i < len; i++)
+      bytes += darr[i].ptr_array_len * darr[i].bytes;
+    TAU_TRACE_SENDMSG (1, proc, bytes);
+  }
+  rval = PARMCI_GetV (darr, len, proc);
+  return rval;
+}
+
+int
+ARMCI_AccV (int op, void *scale, armci_giov_t * darr, int len, int proc)
+{
+  int rval;
+  {
+    int i, bytes = 0;
+    for (i = 0; i < len; i++)
+      bytes += darr[i].ptr_array_len * darr[i].bytes;
+    TAU_TRACE_SENDMSG (1, proc, bytes);
+  }
+  rval = PARMCI_AccV (op, scale, darr, len, proc);
+  return rval;
+}
+
+int
+ARMCI_NbAcc (int optype, void *scale, void *src, void *dst, int bytes, int proc,
+             armci_hdl_t * nb_handle)
+{
+  int rval;
+  TAU_TRACE_SENDMSG (1, proc, bytes);
+  rval = PARMCI_NbAcc (optype, scale, src, dst, bytes, proc, nb_handle);
+  return rval;
+}
+
+int
 ARMCI_NbPut (void *src, void *dst, int bytes, int proc,
 	     armci_hdl_t * nb_handle)
 {
   int rval;
   TAU_TRACE_SENDMSG (1, proc, bytes);
   rval = PARMCI_NbPut (src, dst, bytes, proc, nb_handle);
+  return rval;
+}
+
+int
+ARMCI_NbGet (void *src, void *dst, int bytes, int proc,
+	     armci_hdl_t * nb_handle)
+{
+  int rval;
+  TAU_TRACE_SENDMSG (1, proc, bytes);
+  rval = PARMCI_NbGet (src, dst, bytes, proc, nb_handle);
+  return rval;
+}
+
+int
+ARMCI_NbPutS (void *src_ptr, int *src_stride_arr, void *dst_ptr,
+              int *dst_stride_arr, int *count, int stride_levels, int proc,
+              armci_hdl_t * nb_handle)
+{
+  int rval;
+  {
+    int i, bytes = 1;
+    for (i = 0; i < stride_levels + 1; i++)
+      bytes *= count[i];
+    TAU_TRACE_SENDMSG (1, proc, bytes);
+  }
+  rval =
+    PARMCI_NbPutS (src_ptr, src_stride_arr, dst_ptr, dst_stride_arr, count,
+                   stride_levels, proc, nb_handle);
   return rval;
 }
 
@@ -218,57 +330,6 @@ ARMCI_NbGetS (void *src_ptr, int *src_stride_arr, void *dst_ptr,
   rval =
     PARMCI_NbGetS (src_ptr, src_stride_arr, dst_ptr, dst_stride_arr, count,
 		   stride_levels, proc, nb_handle);
-  return rval;
-}
-
-
-int
-ARMCI_Get (void *src, void *dst, int bytes, int proc)
-{
-  int rval;
-  TAU_TRACE_SENDMSG (1, proc, bytes);
-  rval = PARMCI_Get (src, dst, bytes, proc);
-  return rval;
-}
-
-int
-ARMCI_Put (void *src, void *dst, int bytes, int proc)
-{
-  int rval;
-  TAU_TRACE_SENDMSG (1, proc, bytes);
-  rval = PARMCI_Put (src, dst, bytes, proc);
-  return rval;
-}
-
-int
-ARMCI_GetS (void *src_ptr, int *src_stride_arr, void *dst_ptr,
-	    int *dst_stride_arr, int *count, int stride_levels, int proc)
-{
-  int rval;
-  {
-    int i, bytes = 1;
-    for (i = 0; i < stride_levels + 1; i++)
-      bytes *= count[i];
-    TAU_TRACE_SENDMSG (1, proc, bytes);
-  }
-  rval =
-    PARMCI_GetS (src_ptr, src_stride_arr, dst_ptr, dst_stride_arr, count,
-		 stride_levels, proc);
-  return rval;
-}
-
-int
-ARMCI_NbAccV (int op, void *scale, armci_giov_t * darr, int len, int proc,
-	      armci_hdl_t * nb_handle)
-{
-  int rval;
-  {
-    int i, bytes = 0;
-    for (i = 0; i < len; i++)
-      bytes += darr[i].ptr_array_len * darr[i].bytes;
-    TAU_TRACE_SENDMSG (1, proc, bytes);
-  }
-  rval = PARMCI_NbAccV (op, scale, darr, len, proc, nb_handle);
   return rval;
 }
 
@@ -291,41 +352,6 @@ ARMCI_NbAccS (int optype, void *scale, void *src_ptr, int *src_stride_arr,
 }
 
 int
-ARMCI_PutS (void *src_ptr, int *src_stride_arr, void *dst_ptr,
-	    int *dst_stride_arr, int *count, int stride_levels, int proc)
-{
-  int rval;
-  {
-    int i, bytes = 1;
-    for (i = 0; i < stride_levels + 1; i++)
-      bytes *= count[i];
-    TAU_TRACE_SENDMSG (1, proc, bytes);
-  }
-  rval =
-    PARMCI_PutS (src_ptr, src_stride_arr, dst_ptr, dst_stride_arr, count,
-		 stride_levels, proc);
-  return rval;
-}
-
-int
-ARMCI_PutV (armci_giov_t * darr, int len, int proc)
-{
-  int rval;
-  {
-    int i, bytes = 0;
-    for (i = 0; i < len; i++)
-      bytes += darr[i].ptr_array_len * darr[i].bytes;
-    TAU_TRACE_SENDMSG (1, proc, bytes);
-  }
-  rval = PARMCI_PutV (darr, len, proc);
-  return rval;
-}
-
-
-
-
-
-int
 ARMCI_NbPutV (armci_giov_t * darr, int len, int proc, armci_hdl_t * nb_handle)
 {
   int rval;
@@ -338,28 +364,6 @@ ARMCI_NbPutV (armci_giov_t * darr, int len, int proc, armci_hdl_t * nb_handle)
   rval = PARMCI_NbPutV (darr, len, proc, nb_handle);
   return rval;
 }
-
-
-
-
-int
-ARMCI_GetV (armci_giov_t * darr, int len, int proc)
-{
-  int rval;
-  {
-    int i, bytes = 0;
-    for (i = 0; i < len; i++)
-      bytes += darr[i].ptr_array_len * darr[i].bytes;
-    TAU_TRACE_SENDMSG (1, proc, bytes);
-  }
-  rval = PARMCI_GetV (darr, len, proc);
-  return rval;
-}
-
-
-
-
-
 
 int
 ARMCI_NbGetV (armci_giov_t * darr, int len, int proc, armci_hdl_t * nb_handle)
@@ -375,38 +379,22 @@ ARMCI_NbGetV (armci_giov_t * darr, int len, int proc, armci_hdl_t * nb_handle)
   return rval;
 }
 
-
-
-
-
-
 int
-ARMCI_NbGet (void *src, void *dst, int bytes, int proc,
-	     armci_hdl_t * nb_handle)
-{
-  int rval;
-  TAU_TRACE_SENDMSG (1, proc, bytes);
-  rval = PARMCI_NbGet (src, dst, bytes, proc, nb_handle);
-  return rval;
-}
-
-int
-ARMCI_NbPutS (void *src_ptr, int *src_stride_arr, void *dst_ptr,
-	      int *dst_stride_arr, int *count, int stride_levels, int proc,
+ARMCI_NbAccV (int op, void *scale, armci_giov_t * darr, int len, int proc,
 	      armci_hdl_t * nb_handle)
 {
   int rval;
   {
-    int i, bytes = 1;
-    for (i = 0; i < stride_levels + 1; i++)
-      bytes *= count[i];
+    int i, bytes = 0;
+    for (i = 0; i < len; i++)
+      bytes += darr[i].ptr_array_len * darr[i].bytes;
     TAU_TRACE_SENDMSG (1, proc, bytes);
   }
-  rval =
-    PARMCI_NbPutS (src_ptr, src_stride_arr, dst_ptr, dst_stride_arr, count,
-		   stride_levels, proc, nb_handle);
+  rval = PARMCI_NbAccV (op, scale, darr, len, proc, nb_handle);
   return rval;
 }
+
+/* flag ops */
 
 int
 ARMCI_Put_flag (void *src, void *dst, int bytes, int *f, int v, int proc)
@@ -452,6 +440,8 @@ ARMCI_PutS_flag_dir (void *src_ptr, int *src_stride_arr, void *dst_ptr,
 			  count, stride_levels, flag, val, proc);
   return rval;
 }
+
+/* value ops */
 
 int
 ARMCI_PutValueInt (int src, void *dst, int proc)
