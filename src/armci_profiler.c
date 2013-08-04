@@ -1,7 +1,20 @@
+/*
+ * The original developers of the TAU-ARMCI interface were
+ * Jeff Hammond, Sriram Krishnamoorthy and Sameer Shende.
+ *
+ * Copyright (C) 2010. Argonne National Laboratory.
+ * Copyright (C) 2010. Pacific Northwest National Laboratory.
+ * Copyright (C) 2010. University of Oregon.
+ * Copyright (C) 2010. Paratools, Inc.
+ */
+
+/*
+ * Copyright (C) 2013. See COPYRIGHT in top-level directory.
+ */
+
 #include <stdio.h>
 #include "armci.h"
 #include <TAU.h>
-
 
 int
 ARMCI_Init ()
@@ -25,6 +38,42 @@ ARMCI_Finalize ()
   PARMCI_Finalize ();
 }
 
+/* memory ops */
+
+int
+ARMCI_Malloc (void **ptr_arr, armci_size_t bytes)
+{
+  int rval;
+  rval = PARMCI_Malloc (ptr_arr, bytes);
+  return rval;
+}
+
+int
+ARMCI_Free (void *ptr)
+{
+  int rval;
+  rval = PARMCI_Free (ptr);
+  return rval;
+}
+
+void *
+ARMCI_Malloc_local (armci_size_t bytes)
+{
+  void *rval;
+  rval = PARMCI_Malloc_local (bytes);
+  return rval;
+}
+
+int
+ARMCI_Free_local (void *ptr)
+{
+  int rval;
+  rval = PARMCI_Free_local (ptr);
+  return rval;
+}
+
+/* bulk sync ops */
+
 void
 ARMCI_Fence (int proc)
 {
@@ -43,39 +92,7 @@ ARMCI_Barrier ()
   PARMCI_Barrier ();
 }
 
-int
-ARMCI_Malloc (void **ptr_arr, armci_size_t bytes)
-{
-  int rval;
-  rval = PARMCI_Malloc (ptr_arr, bytes);
-  return rval;
-}
-
-void *
-ARMCI_Malloc_local (armci_size_t bytes)
-{
-  void *rval;
-  rval = PARMCI_Malloc_local (bytes);
-  return rval;
-}
-
-
-int
-ARMCI_Free_local (void *ptr)
-{
-  int rval;
-  rval = PARMCI_Free_local (ptr);
-  return rval;
-}
-
-
-int
-ARMCI_Free (void *ptr)
-{
-  int rval;
-  rval = PARMCI_Free (ptr);
-  return rval;
-}
+/* nonblocking sync ops */
 
 int
 ARMCI_Test (armci_hdl_t * nb_handle)
@@ -109,6 +126,8 @@ ARMCI_WaitAll ()
   return rval;
 }
 
+/* mutex ops */
+
 int
 ARMCI_Create_mutexes (int num)
 {
@@ -137,6 +156,8 @@ ARMCI_Unlock (int mutex, int proc)
   PARMCI_Unlock (mutex, proc);
 }
 
+/* atomic ops */
+
 int
 ARMCI_Rmw (int op, int *ploc, int *prem, int extra, int proc)
 {
@@ -145,6 +166,8 @@ ARMCI_Rmw (int op, int *ploc, int *prem, int extra, int proc)
   rval = PARMCI_Rmw (op, ploc, prem, extra, proc);
   return rval;
 }
+
+/* blocking ops */
 
 int
 ARMCI_Put (void *src, void *dst, int bytes, int proc)
@@ -267,15 +290,7 @@ ARMCI_AccV (int op, void *scale, armci_giov_t * darr, int len, int proc)
   return rval;
 }
 
-int
-ARMCI_NbAcc (int optype, void *scale, void *src, void *dst, int bytes, int proc,
-             armci_hdl_t * nb_handle)
-{
-  int rval;
-  TAU_TRACE_SENDMSG (1, proc, bytes);
-  rval = PARMCI_NbAcc (optype, scale, src, dst, bytes, proc, nb_handle);
-  return rval;
-}
+/* nonblocking ops */
 
 int
 ARMCI_NbPut (void *src, void *dst, int bytes, int proc,
@@ -294,6 +309,16 @@ ARMCI_NbGet (void *src, void *dst, int bytes, int proc,
   int rval;
   TAU_TRACE_SENDMSG (1, proc, bytes);
   rval = PARMCI_NbGet (src, dst, bytes, proc, nb_handle);
+  return rval;
+}
+
+int
+ARMCI_NbAcc (int optype, void *scale, void *src, void *dst, int bytes, int proc,
+             armci_hdl_t * nb_handle)
+{
+  int rval;
+  TAU_TRACE_SENDMSG (1, proc, bytes);
+  rval = PARMCI_NbAcc (optype, scale, src, dst, bytes, proc, nb_handle);
   return rval;
 }
 
