@@ -5,33 +5,40 @@
 #ifndef HAVE_ARMCI_PROFILER_H
 #define HAVE_ARMCI_PROFILER_H
 
-enum ARMCI_Profiler_stats
-{
+#include <stdio.h>
 
+enum ARMCI_Profiler_function_e
+{
+  FENCE = 0, ALLFENCE = 1, BARRIER = 2,
+  TEST = 3, WAIT = 4, WAITPROC = 5, WAITALL = 6,
+  MALLOC = 7, FREE = 8,
+  RMW = 9,
+  PUT  = 10, GET  = 11, ACC  = 12,
+  PUTS = 13, GETS = 14, ACCS = 15,
+  PUTV = 16, GETV = 17, ACCV = 18,
+  NBPUT  = 19, NBGET  = 20, NBACC  = 21,
+  NBPUTS = 22, NBGETS = 23, NBACCS = 24,
+  NBPUTV = 25, NBGETV = 26, NBACCV = 27,
+  LAST_FUNCTION = 28,
+};
+
+enum ARMCI_Profiler_key_e
+{
+  NAME,
+  COUNT,
+  TIME
 };
 
 typedef struct {
+  char   name[12];
   int    total_count;
   double total_time;
 } armci_profiler_stat_t;
 
-extern global_state_t ARMCII_GLOBAL_STATE;
-  
-typedef struct {
-  void *src;
-  void *dst;
-  int   stride_levels;
+armci_profiler_stat_t * armci_profiler_stats;
 
-  int  *base_ptr;
-  int  *src_stride_ar;
-  int  *dst_stride_ar;
-  int  *count;
-
-  /* Iterator State */
-  int   was_contiguous;
-  int  *idx;
-} armcii_iov_iter_t;
-
-void ARMCII_Acc_type_translate(int armci_datatype, MPI_Datatype *type, int *type_size);
+void ARMCI_Profiler_initialize(void);
+void ARMCI_Profiler_finalize(void);
+void ARMCI_Profiler_add(enum ARMCI_Profiler_function_e fn, enum ARMCI_Profiler_key_e key, void * value);
 
 #endif /* HAVE_ARMCI_PROFILER_H */

@@ -14,7 +14,105 @@
 
 #include <stdio.h>
 #include "armci.h"
+
+#ifdef USE_TAU
 #include <TAU.h>
+#else
+#define TAU_TRACE_SENDMSG
+#endif
+
+#ifdef USE_ARMCI_PROFILER
+#include "armci_profiler.h"
+
+static inline void armci_profiler_get_name(int fn, char * p)
+{
+  switch(fn) {
+    case(FENCE):    p = "FENCE";    break;
+    case(ALLFENCE): p = "ALLFENCE"; break;
+    case(BARRIER):  p = "BARRIER";  break;
+    case(TEST):     p = "TEST";     break;
+    case(WAIT):     p = "WAIT";     break;
+    case(WAITPROC): p = "WAITPROC"; break;
+    case(WAITALL):  p = "WAITALL";  break;
+    case(MALLOC):   p = "MALLOC";   break;
+    case(FREE):     p = "FREE";     break;
+    case(RMW):      p = "RMW";      break;
+    case(PUT):      p = "PUT";      break;
+    case(GET):      p = "GET";      break;
+    case(ACC):      p = "ACC";      break;
+    case(PUTS):     p = "PUTS";     break;
+    case(GETS):     p = "GETS";     break;
+    case(ACCS):     p = "ACCS";     break;
+    case(PUTV):     p = "PUTV";     break;
+    case(GETV):     p = "GETV";     break;
+    case(ACCV):     p = "ACCV";     break;
+    case(NBPUT):    p = "NBPUT";    break;
+    case(NBGET):    p = "NBGET";    break;
+    case(NBACC):    p = "NBACC";    break;
+    case(NBPUTS):   p = "NBPUTS";   break;
+    case(NBGETS):   p = "NBGETS";   break;
+    case(NBACCS):   p = "NBACCS";   break;
+    case(NBPUTV):   p = "NBPUTV";   break;
+    case(NBGETV):   p = "NBGETV";   break;
+    case(NBACCV):   p = "NBACCV";   break;
+  }
+  return;
+}
+
+void ARMCI_Profiler_initialize(void)
+{
+  armci_profiler_stats = (armci_profiler_stat_t *) malloc( LAST_FUNCTION * sizeof(armci_profiler_stat_t) );
+  if (armci_profiler_stats==NULL)
+    fprintf(stderr, "ARMCI_Profiler_init: malloc failed \n");
+
+  for (int fn=0; fn<LAST_FUNCTION; fn++) {
+      memset( &(armci_profiler_stats[fn][NAME]), '\0', 12);
+      armci_profiler_get_name(fn, &(armci_profiler_stats[fn][NAME]));
+      armci_profiler_stats[fn][COUNT] = 0;
+      armci_profiler_stats[fn][TIME]  = 0.0;
+  }
+
+  return;
+}
+
+void ARMCI_Profiler_finalize(void)
+{
+  for (int fn=0; fn<LAST_FUNCTION; fn++) {
+     fprintf(stderr, "name = %12c %d %lf \n",
+         armci_profiler_stats[fn][NAME],
+         armci_profiler_stats[fn][COUNT],
+         armci_profiler_stats[fn][TIME]);
+  }
+
+  free(armci_profiler_stats);
+
+  return;
+}
+
+void ARMCI_Profiler_add(enum ARMCI_Profiler_function_e fn, enum ARMCI_Profiler_key_e key, void * value)
+{
+  if (fn<LAST_FUNCTION) {
+    switch(key) {
+      case(COUNT):
+        int i = (int)(*value);
+        armci_profiler_stats[fn][COUNT] += i;
+        break;
+      case(TIME):
+        double d = (double)(*value);
+        armci_profiler_stats[fn][COUNT] += (double)(*value);
+        break;
+      default:
+        fprintf(stderr, "ARMCI_Profiler_add: unsupported key %d \n", key);
+    }
+  }
+
+  return;
+}
+#else
+void ARMCI_Profiler_add(enum ARMCI_Profiler_function_e fn, enum ARMCI_Profiler_key_e key, void * value) {};
+void ARMCI_Profiler_init(void) {};
+void ARMCI_Profiler_init(void) {};
+#endif
 
 int
 ARMCI_Init ()
@@ -159,10 +257,11 @@ ARMCI_Unlock (int mutex, int proc)
 /* atomic ops */
 
 int
-ARMCI_Rmw (int op, int *ploc, int *prem, int extra, int proc)
+ARMCI_Rmw (int op, void *ploc, void *prem, int extra, int proc)
 {
   int rval;
-  TAU_TRACE_SENDMSG (1, proc, 4);
+  int size = (op == ARMCI_SWAP_LONG || op == ARMCI_FETCH_AND_ADD_LONG) ? 8 : 4;
+  TAU_TRACE_SENDMSG (1, proc, size);
   rval = PARMCI_Rmw (op, ploc, prem, extra, proc);
   return rval;
 }
