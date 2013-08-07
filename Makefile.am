@@ -2,6 +2,8 @@
 # Copyright (C) 2010. See COPYRIGHT in top-level directory.
 #
 
+AUTOMAKE_OPTIONS = subdir-objects
+
 ACLOCAL_AMFLAGS = -I m4
 AM_CPPFLAGS = -I$(top_srcdir)/src
 
