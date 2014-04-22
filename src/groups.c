@@ -107,7 +107,7 @@ static inline void ARMCI_Group_create_comm_collective(int grp_size, int *pid_lis
   MPI_Group_incl(mpi_grp_parent, grp_size, pid_list, &mpi_grp_child);
 
   MPI_Comm_create(armci_grp_parent->comm, mpi_grp_child, &armci_grp_out->comm);
- 
+
   MPI_Group_free(&mpi_grp_parent);
   MPI_Group_free(&mpi_grp_child);
 }
@@ -124,6 +124,45 @@ static inline void ARMCI_Group_create_comm_collective(int grp_size, int *pid_lis
 static inline void ARMCI_Group_create_comm_noncollective(int grp_size, int *pid_list, ARMCI_Group *armci_grp_out,
     ARMCI_Group *armci_grp_parent) {
 
+#if 1
+  int grp_me, me, nproc;
+
+  me    = armci_grp_parent->rank;
+  nproc = armci_grp_parent->size;
+
+  /* CHECK: If I'm not a member, return COMM_NULL */
+  grp_me = -1;
+  for (int i = 0; i < grp_size; i++) {
+    if (pid_list[i] == me) {
+      grp_me = i;
+      break;
+    }
+  }
+
+  if (grp_me < 0) {
+    armci_grp_out->comm = MPI_COMM_NULL;
+    return;
+  }
+  else if (grp_size == 1 && pid_list[0] == me) {
+    MPI_Comm_dup(MPI_COMM_SELF, &armci_grp_out->comm);
+    return;
+  }
+  else {
+
+      const int COMM_CREATE_GROUP_TAG = 42;
+      MPI_Group mpi_grp_parent;
+      MPI_Group mpi_grp_child;
+
+      MPI_Comm_group(armci_grp_parent->comm, &mpi_grp_parent);
+      MPI_Group_incl(mpi_grp_parent, grp_size, pid_list, &mpi_grp_child);
+
+      MPI_Comm_create_group(armci_grp_parent->comm, mpi_grp_child, COMM_CREATE_GROUP_TAG, &armci_grp_out->comm);
+
+      MPI_Group_free(&mpi_grp_parent);
+      MPI_Group_free(&mpi_grp_child);
+  }
+
+#else
   const int INTERCOMM_TAG = 42;
   int       i, grp_me, me, nproc, merge_size;
   MPI_Comm  pgroup, inter_pgroup;
@@ -175,6 +214,7 @@ static inline void ARMCI_Group_create_comm_noncollective(int grp_size, int *pid_
   }
 
   armci_grp_out->comm = pgroup;
+#endif
 }
 
 
