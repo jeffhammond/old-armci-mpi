@@ -158,6 +158,8 @@ int PARMCI_Init(void) {
 
   ARMCII_GLOBAL_STATE.init_count++;
 
+  ARMCI_PROFILE_INIT();
+
   if (ARMCII_GLOBAL_STATE.verbose) {
     if (ARMCI_GROUP_WORLD.rank == 0) {
       int major, minor;
@@ -267,6 +269,8 @@ int PARMCI_Finalize(void) {
   if (ARMCII_GLOBAL_STATE.init_count == 0) {
     return 0;
   }
+
+  ARMCI_PROFILE_DESTROY();
 
   ARMCII_GLOBAL_STATE.init_count--;
 

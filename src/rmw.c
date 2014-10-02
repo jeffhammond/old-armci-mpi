@@ -44,6 +44,9 @@ int PARMCI_Rmw(int op, void *ploc, void *prem, int value, int proc) {
   MPI_Op       rop;
   gmr_t *src_mreg, *dst_mreg;
 
+  ARMCI_FUNC_PROFILE_TIMING_START(PARMCI_Rmw);
+  ARMCI_FUNC_PROFILE_COUNTER_INC(PARMCI_Rmw, proc);
+
   /* If NOGUARD is set, assume the buffer is not shared */
   if (ARMCII_GLOBAL_STATE.shr_buf_method != ARMCII_SHR_BUF_NOGUARD)
     src_mreg = gmr_lookup(ploc, ARMCI_GROUP_WORLD.rank);
@@ -101,6 +104,8 @@ int PARMCI_Rmw(int op, void *ploc, void *prem, int value, int proc) {
     else
       *(int*) ploc = fetch_val_i;
   }
+
+  ARMCI_FUNC_PROFILE_TIMING_END(PARMCI_Rmw);
 
   return 0;
 }

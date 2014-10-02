@@ -87,6 +87,9 @@ void PARMCI_Access_end(void *ptr) {
 int PARMCI_Get(void *src, void *dst, int size, int target) {
   gmr_t *src_mreg, *dst_mreg;
 
+  ARMCI_FUNC_PROFILE_TIMING_START(PARMCI_Get);
+  ARMCI_FUNC_PROFILE_COUNTER_INC(PARMCI_Get, target);
+
   src_mreg = gmr_lookup(src, target);
 
   /* If NOGUARD is set, assume the buffer is not shared */
@@ -124,6 +127,8 @@ int PARMCI_Get(void *src, void *dst, int size, int target) {
 
     MPI_Free_mem(dst_buf);
   }
+
+  ARMCI_FUNC_PROFILE_TIMING_END(PARMCI_Get);
 
   return 0;
 }
@@ -219,6 +224,9 @@ int PARMCI_Acc(int datatype, void *scale, void *src, void *dst, int bytes, int p
   MPI_Datatype type;
   gmr_t *src_mreg, *dst_mreg;
 
+  ARMCI_FUNC_PROFILE_TIMING_START(PARMCI_Acc);
+  ARMCI_FUNC_PROFILE_COUNTER_INC(PARMCI_Acc, proc);
+
   /* If NOGUARD is set, assume the buffer is not shared */
   if (ARMCII_GLOBAL_STATE.shr_buf_method != ARMCII_SHR_BUF_NOGUARD)
     src_mreg = gmr_lookup(src, ARMCI_GROUP_WORLD.rank);
@@ -264,6 +272,8 @@ int PARMCI_Acc(int datatype, void *scale, void *src, void *dst, int bytes, int p
 
   if (src_buf != src)
     MPI_Free_mem(src_buf);
+
+  ARMCI_FUNC_PROFILE_TIMING_END(PARMCI_Acc);
 
   return 0;
 }

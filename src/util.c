@@ -39,6 +39,9 @@ void ARMCI_Error(char *msg, int code) {
 void PARMCI_Barrier(void) {
   gmr_t *cur_mreg = gmr_list;
 
+  ARMCI_FUNC_PROFILE_TIMING_START(PARMCI_Barrier);
+  ARMCI_FUNC_PROFILE_COUNTER_INC(PARMCI_Barrier, 0);
+
   PARMCI_AllFence();
   MPI_Barrier(ARMCI_GROUP_WORLD.comm);
 
@@ -46,6 +49,8 @@ void PARMCI_Barrier(void) {
     gmr_sync(cur_mreg);
     cur_mreg = cur_mreg->next;
   }
+
+  ARMCI_FUNC_PROFILE_TIMING_END(PARMCI_Barrier);
 }
 
 /* -- begin weak symbols block -- */
@@ -91,10 +96,16 @@ void PARMCI_Fence(int proc) {
 void PARMCI_AllFence(void) {
   gmr_t *cur_mreg = gmr_list;
 
+  ARMCI_FUNC_PROFILE_TIMING_START(PARMCI_AllFence);
+  ARMCI_FUNC_PROFILE_COUNTER_INC(PARMCI_AllFence, 0);
+
   while (cur_mreg) {
     gmr_flushall(cur_mreg, 0);
     cur_mreg = cur_mreg->next;
   }
+
+  ARMCI_FUNC_PROFILE_TIMING_END(PARMCI_AllFence);
+
   return;
 }
 

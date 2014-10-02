@@ -215,6 +215,9 @@ int PARMCI_GetS(void *src_ptr, int src_stride_ar[/*stride_levels*/],
 
   int err;
 
+  ARMCI_FUNC_PROFILE_TIMING_START(PARMCI_GetS);
+  ARMCI_FUNC_PROFILE_COUNTER_INC(PARMCI_GetS, proc);
+
   if (ARMCII_GLOBAL_STATE.strided_method == ARMCII_STRIDED_DIRECT) {
     void         *dst_buf = NULL;
     gmr_t *mreg, *gmr_loc = NULL;
@@ -282,6 +285,8 @@ int PARMCI_GetS(void *src_ptr, int src_stride_ar[/*stride_levels*/],
     free(iov.dst_ptr_array);
   }
 
+  ARMCI_FUNC_PROFILE_TIMING_END(PARMCI_GetS);
+
   return err;
 }
 
@@ -318,6 +323,9 @@ int PARMCI_AccS(int datatype, void *scale,
                int count[/*stride_levels+1*/], int stride_levels, int proc) {
 
   int err;
+
+  ARMCI_FUNC_PROFILE_TIMING_START(PARMCI_AccS);
+  ARMCI_FUNC_PROFILE_COUNTER_INC(PARMCI_AccS, proc);
 
   if (ARMCII_GLOBAL_STATE.strided_method == ARMCII_STRIDED_DIRECT) {
     void         *src_buf = NULL;
@@ -423,6 +431,8 @@ int PARMCI_AccS(int datatype, void *scale,
     free(iov.src_ptr_array);
     free(iov.dst_ptr_array);
   }
+
+  ARMCI_FUNC_PROFILE_TIMING_END(PARMCI_AccS);
 
   return err;
 }

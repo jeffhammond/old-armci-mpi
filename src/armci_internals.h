@@ -7,6 +7,7 @@
 
 #include <armci.h>
 #include <armciconf.h>
+#include "profile.h"
 
 #if   HAVE_STDINT_H
 #  include <stdint.h>
