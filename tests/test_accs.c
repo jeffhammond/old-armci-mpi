@@ -11,6 +11,13 @@
 #define YDIM 1024
 #define ITERATIONS 10
 
+#ifdef ENABLE_PROFILE
+extern void ARMCI_Profile_reset_counter();
+extern void ARMCI_Profile_reset_timing();
+extern void ARMCI_Profile_print_timing();
+extern void ARMCI_Profile_print_counter();
+#endif
+
 int main(int argc, char **argv) {
     int i, j, rank, nranks, peer, bufsize, errors, total_errors;
     double **buffer, *src_buf;
@@ -40,6 +47,11 @@ int main(int argc, char **argv) {
     }
 
     ARMCI_Access_end(buffer[rank]);
+
+#ifdef ENABLE_PROFILE
+    ARMCI_Profile_reset_counter();
+    ARMCI_Profile_reset_timing();
+#endif
 
     scaling = 2.0;
 
@@ -93,6 +105,17 @@ int main(int argc, char **argv) {
     ARMCI_Free((void *) buffer[rank]);
     ARMCI_Free_local(src_buf);
     free(buffer);
+
+#ifdef ENABLE_PROFILE
+    for (i = 0; i < nranks; i++) {
+        if (i == rank) {
+            printf("----- Rank %d:\n", rank);
+            ARMCI_Profile_print_timing();
+            ARMCI_Profile_print_counter();
+        }
+        MPI_Barrier(MPI_COMM_WORLD);
+    }
+#endif
 
     ARMCI_Finalize();
     MPI_Finalize();
