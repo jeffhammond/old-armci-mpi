@@ -28,6 +28,8 @@ const char *ARMCI_Profile_func_names[PROF_MAX_NUM_PROFILE_FUNC] = {
     "PARMCI_Get",
     "PARMCI_AccS",
     "PARMCI_Acc",
+    "PARMCI_NbGetS",
+    "PARMCI_NbGet",
     "PARMCI_Rmw",
     "PARMCI_Barrier",
     "PARMCI_AllFence",

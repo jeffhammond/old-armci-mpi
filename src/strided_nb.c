@@ -153,6 +153,9 @@ int PARMCI_NbGetS(void *src_ptr, int src_stride_ar[/*stride_levels*/],
 
   int err;
 
+  ARMCI_FUNC_PROFILE_TIMING_START(PARMCI_NbGetS);
+  ARMCI_FUNC_PROFILE_COUNTER_INC(PARMCI_NbGetS, proc);
+
   if (ARMCII_GLOBAL_STATE.strided_method == ARMCII_STRIDED_DIRECT) {
     void         *dst_buf = NULL;
     gmr_t *mreg, *gmr_loc = NULL;
@@ -228,6 +231,8 @@ int PARMCI_NbGetS(void *src_ptr, int src_stride_ar[/*stride_levels*/],
 #ifdef EXPLICIT_PROGRESS
   gmr_progress();
 #endif
+
+  ARMCI_FUNC_PROFILE_TIMING_END(PARMCI_NbGetS);
 
   return err;
 }

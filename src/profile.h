@@ -16,6 +16,8 @@ enum ARMCI_Profile_func {
     PROF_PARMCI_Get,
     PROF_PARMCI_AccS,
     PROF_PARMCI_Acc,
+    PROF_PARMCI_NbGetS,
+    PROF_PARMCI_NbGet,
     PROF_PARMCI_Rmw,
     PROF_PARMCI_Barrier,
     PROF_PARMCI_AllFence,

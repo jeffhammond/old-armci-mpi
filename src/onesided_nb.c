@@ -107,6 +107,9 @@ int PARMCI_NbPut(void *src, void *dst, int size, int target, armci_hdl_t *handle
 int PARMCI_NbGet(void *src, void *dst, int size, int target, armci_hdl_t *handle) {
   gmr_t *src_mreg, *dst_mreg;
 
+  ARMCI_FUNC_PROFILE_TIMING_START(PARMCI_NbGet);
+  ARMCI_FUNC_PROFILE_COUNTER_INC(PARMCI_NbGet, target);
+
   src_mreg = gmr_lookup(src, target);
 
   /* If NOGUARD is set, assume the buffer is not shared */
@@ -133,6 +136,8 @@ int PARMCI_NbGet(void *src, void *dst, int size, int target, armci_hdl_t *handle
 #ifdef EXPLICIT_PROGRESS
   gmr_progress();
 #endif
+
+  ARMCI_FUNC_PROFILE_TIMING_END(PARMCI_NbGet);
 
   return 0;
 }
