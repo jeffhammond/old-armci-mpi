@@ -26,5 +26,16 @@ void armci_profile_print_timing_(){
 void armci_profile_print_counter_(){
     ARMCI_Profile_print_counter();
 }
+#else
+void armci_profile_reset_counter_(){
+}
 
+void armci_profile_reset_timing_(){
+}
+
+void armci_profile_print_timing_(){
+}
+
+void armci_profile_print_counter_(){
+}
 #endif
