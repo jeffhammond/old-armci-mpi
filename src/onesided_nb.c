@@ -236,6 +236,8 @@ int PARMCI_NbAcc(int datatype, void *scale, void *src, void *dst, int bytes, int
   */
 int PARMCI_Wait(armci_hdl_t* handle) {
   gmr_t *cur_mreg = gmr_list;
+  ARMCI_FUNC_PROFILE_TIMING_START(PARMCI_Wait);
+  ARMCI_FUNC_PROFILE_COUNTER_INC(PARMCI_Wait, 0);
 
   if(handle->aggregate > 0) {
     while (cur_mreg) {
@@ -250,6 +252,8 @@ int PARMCI_Wait(armci_hdl_t* handle) {
       cur_mreg = cur_mreg->next;
     }
   }
+
+  ARMCI_FUNC_PROFILE_TIMING_END(PARMCI_Wait);
   return 0;
 }
 
@@ -309,10 +313,15 @@ int PARMCI_WaitProc(int proc) {
 int PARMCI_WaitAll(void) {
   gmr_t *cur_mreg = gmr_list;
 
+  ARMCI_FUNC_PROFILE_TIMING_START(PARMCI_WaitAll);
+  ARMCI_FUNC_PROFILE_COUNTER_INC(PARMCI_WaitAll, 0);
+
   while (cur_mreg) {
     gmr_flushall(cur_mreg, 1); /* local only */
     cur_mreg = cur_mreg->next;
   }
+
+  ARMCI_FUNC_PROFILE_TIMING_END(PARMCI_WaitAll);
   return 0;
 }
 

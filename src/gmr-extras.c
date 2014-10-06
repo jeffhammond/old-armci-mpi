@@ -171,6 +171,9 @@ int gmr_flush(gmr_t *mreg, int proc, int local_only) {
 int gmr_flushall(gmr_t *mreg, int local_only) {
   int grp_me   = ARMCII_Translate_absolute_to_group(&mreg->group, ARMCI_GROUP_WORLD.rank);
 
+  ARMCI_FUNC_PROFILE_TIMING_START(gmr_flushall);
+  ARMCI_FUNC_PROFILE_COUNTER_INC(gmr_flushall, 0);
+
   ARMCII_Assert(grp_me >= 0);
   ARMCII_Assert_msg(mreg->window != MPI_WIN_NULL, "A non-null mreg contains a null window.");
 
@@ -178,6 +181,8 @@ int gmr_flushall(gmr_t *mreg, int local_only) {
     MPI_Win_flush_local_all(mreg->window);
   else
     MPI_Win_flush_all(mreg->window);
+
+  ARMCI_FUNC_PROFILE_TIMING_END(gmr_flushall);
 
   return 0;
 }

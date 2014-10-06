@@ -21,8 +21,11 @@ enum ARMCI_Profile_func {
     PROF_PARMCI_Rmw,
     PROF_PARMCI_Barrier,
     PROF_PARMCI_AllFence,
+    PROF_PARMCI_WaitAll,
+    PROF_PARMCI_Wait,
     PROF_gmr_create,
     PROF_gmr_destroy,
+    PROF_gmr_flushall,
     PROF_MAX_NUM_PROFILE_FUNC
 };
 

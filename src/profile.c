@@ -33,8 +33,11 @@ const char *ARMCI_Profile_func_names[PROF_MAX_NUM_PROFILE_FUNC] = {
     "PARMCI_Rmw",
     "PARMCI_Barrier",
     "PARMCI_AllFence",
+    "PARMCI_WaitAll",
+    "PARMCI_Wait",
     "gmr_create",
     "gmr_destroy",
+    "gmr_flushall",
 };
 
 int profile_global_var_nproc = 0;
