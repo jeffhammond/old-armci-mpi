@@ -33,10 +33,12 @@ const char *ARMCI_Profile_func_names[PROF_MAX_NUM_PROFILE_FUNC] = {
     "PARMCI_Rmw",
     "PARMCI_Barrier",
     "PARMCI_AllFence",
+    "gmr_create",
+    "gmr_destroy",
 };
 
 int profile_global_var_nproc = 0;
-int prof_counters[MAX_NPROC*PROF_MAX_NUM_PROFILE_FUNC];
+int prof_counters[MAX_NPROC * PROF_MAX_NUM_PROFILE_FUNC];
 double prof_timings[MAX_NPROC];
 
 void ARMCI_Profile_reset_counter()
@@ -44,7 +46,7 @@ void ARMCI_Profile_reset_counter()
     int i;
     if (prof_counters == NULL)
         fprintf(stderr, "WARNING: prof_timings is not initialized\n");
-    
+
     if (prof_counters != NULL)
         for (i = 0; i < PROF_MAX_NUM_PROFILE_FUNC * profile_global_var_nproc; i++)
             prof_counters[i] = 0;
@@ -52,7 +54,7 @@ void ARMCI_Profile_reset_counter()
     gmr_t *cur_mreg = gmr_list;
     while (cur_mreg) {
         MTCORE_Profile_reset_flush_counter(cur_mreg->window);
-      cur_mreg = cur_mreg->next;
+        cur_mreg = cur_mreg->next;
     }
 #endif
 }
@@ -86,18 +88,25 @@ void ARMCI_Profile_print_counter()
     if (!prof_counters)
         return;
     for (i = 0; i < PROF_MAX_NUM_PROFILE_FUNC; i++) {
-        printf("Counter %s : ", ARMCI_Profile_func_names[i]);
+#if PROFILE_LEVEL == 2
         for (dst = 0; dst < profile_global_var_nproc; dst++)
-	    if (prof_counters[dst * PROF_MAX_NUM_PROFILE_FUNC + i] > 0)
-	            printf("%d:%d ", dst, prof_counters[dst * PROF_MAX_NUM_PROFILE_FUNC + i]);
+            if (prof_counters[dst * PROF_MAX_NUM_PROFILE_FUNC + i] > 0)
+                printf("%d:%d ", dst, prof_counters[dst * PROF_MAX_NUM_PROFILE_FUNC + i]);
         printf("\n");
+#else
+        int sum = 0;
+        for (dst = 0; dst < profile_global_var_nproc; dst++)
+            sum += prof_counters[dst * PROF_MAX_NUM_PROFILE_FUNC + i];
+        if (sum > 0)
+            printf("Counter %s : %d\n", ARMCI_Profile_func_names[i], sum);
+#endif
     }
 
 #ifdef ENABLE_MTCORE_PROFILE
     gmr_t *cur_mreg = gmr_list;
     while (cur_mreg) {
-      MTCORE_Profile_print_flush_counter(cur_mreg->window);
-      cur_mreg = cur_mreg->next;
+        MTCORE_Profile_print_flush_counter(cur_mreg->window);
+        cur_mreg = cur_mreg->next;
     }
 #endif
 
