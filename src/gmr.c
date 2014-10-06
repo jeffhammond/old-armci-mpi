@@ -78,13 +78,17 @@ gmr_t *gmr_create(gmr_size_t local_size, void **base_ptrs, ARMCI_Group *group) {
   MPI_Info win_info;
   MPI_Info_create(&win_info);
   MPI_Info_set(win_info, "alloc_shm", "true");
+#elif defined(DISABLE_ALLOC_SHM)
+  MPI_Info win_info;
+  MPI_Info_create(&win_info);
+  MPI_Info_set(win_info, "alloc_shm", "false");
 #else
   MPI_Info win_info = MPI_INFO_NULL;
 #endif
 
   MPI_Win_allocate( (MPI_Aint) local_size, 1, win_info, group->comm, &(alloc_slices[alloc_me].base), &mreg->window);
 
-#ifdef USE_ALLOC_SHM
+#if defined(USE_ALLOC_SHM) || defined(DISABLE_ALLOC_SHM)
     MPI_Info_free(&win_info);
 #endif
 
