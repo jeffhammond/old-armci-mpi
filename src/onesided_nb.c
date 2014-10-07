@@ -239,7 +239,11 @@ int PARMCI_Wait(armci_hdl_t* handle) {
   ARMCI_FUNC_PROFILE_TIMING_START(PARMCI_Wait);
   ARMCI_FUNC_PROFILE_COUNTER_INC(PARMCI_Wait, 0);
 
-  if(handle->aggregate > 0) {
+  if(handle->aggregate > 0
+#ifdef CHECK_AGGREGATE_TARGET_IN_WAIT
+          && handle->target < 0
+#endif
+          ) {
     while (cur_mreg) {
       gmr_flushall(cur_mreg, 1); /* local only */
       cur_mreg = cur_mreg->next;
