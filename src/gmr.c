@@ -74,23 +74,29 @@ gmr_t *gmr_create(gmr_size_t local_size, void **base_ptrs, ARMCI_Group *group) {
 #warning MPI_Win_allocate can lead to correctness issues on some MPI \
          implementations.  Please check your results carefully.
 
+  MPI_Info win_info = MPI_INFO_NULL;
+
 #ifdef USE_ALLOC_SHM
-  MPI_Info win_info;
   MPI_Info_create(&win_info);
   MPI_Info_set(win_info, "alloc_shm", "true");
 #elif defined(DISABLE_ALLOC_SHM)
-  MPI_Info win_info;
   MPI_Info_create(&win_info);
   MPI_Info_set(win_info, "alloc_shm", "false");
 #else
-  MPI_Info win_info = MPI_INFO_NULL;
+  win_info = MPI_INFO_NULL;
+#endif
+
+#ifdef USE_MTCORE_EPOCH_TYPE
+  if(win_info == MPI_INFO_NULL) {
+    MPI_Info_create(&win_info);
+  }
+  MPI_Info_set(win_info, "epoch_type", "lockall");
 #endif
 
   MPI_Win_allocate( (MPI_Aint) local_size, 1, win_info, group->comm, &(alloc_slices[alloc_me].base), &mreg->window);
 
-#if defined(USE_ALLOC_SHM) || defined(DISABLE_ALLOC_SHM)
+  if(win_info != MPI_INFO_NULL)
     MPI_Info_free(&win_info);
-#endif
 
   if (local_size == 0) {
     /* TODO: Is this necessary?  Is it a good idea anymore? */
