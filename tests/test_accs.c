@@ -107,14 +107,8 @@ int main(int argc, char **argv) {
     free(buffer);
 
 #ifdef ENABLE_PROFILE
-    for (i = 0; i < nranks; i++) {
-        if (i == rank) {
-            printf("----- Rank %d:\n", rank);
-            ARMCI_Profile_print_timing();
-            ARMCI_Profile_print_counter();
-        }
-        MPI_Barrier(MPI_COMM_WORLD);
-    }
+    ARMCI_Profile_print_timing("test-acc");
+    ARMCI_Profile_print_counter("test-acc");
 #endif
 
     ARMCI_Finalize();
