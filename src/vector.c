@@ -23,12 +23,11 @@
 int ARMCII_Iov_check_overlap(void **ptrs, int count, int size) {
 #ifndef NO_CHECK_OVERLAP
 #ifdef NO_USE_CTREE
-  int i, j;
 
   if (!ARMCII_GLOBAL_STATE.iov_checks) return 0;
 
-  for (i = 0; i < count; i++) {
-    for (j = i+1; j < count; j++) {
+  for (int i = 0; i < count; i++) {
+    for (int j = i+1; j < count; j++) {
       const uint8_t *ptr_1_lo = ptrs[i];
       const uint8_t *ptr_1_hi = ((uint8_t*)ptrs[i]) + size - 1;
       const uint8_t *ptr_2_lo = ptrs[j];
@@ -44,12 +43,11 @@ int ARMCII_Iov_check_overlap(void **ptrs, int count, int size) {
     }
   }
 #else
-  int i;
   ctree_t ctree = CTREE_EMPTY;
 
   if (!ARMCII_GLOBAL_STATE.iov_checks) return 0;
 
-  for (i = 0; i < count; i++) {
+  for (int i = 0; i < count; i++) {
     int conflict = ctree_insert(&ctree, ptrs[i], ((uint8_t*)ptrs[i]) + size - 1);
 
     if (conflict) {
@@ -79,7 +77,6 @@ int ARMCII_Iov_check_overlap(void **ptrs, int count, int size) {
   * @return          Non-zero (true) on success, zero (false) otherwise.
   */
 int ARMCII_Iov_check_same_allocation(void **ptrs, int count, int proc) {
-  int i;
   gmr_t *mreg;
   void *base, *extent;
 
@@ -89,7 +86,7 @@ int ARMCII_Iov_check_same_allocation(void **ptrs, int count, int proc) {
 
   /* If local, all must be local */
   if (mreg == NULL) {
-    for (i = 1; i < count; i++) {
+    for (int i = 1; i < count; i++) {
       mreg = gmr_lookup(ptrs[i], proc);
       if (mreg != NULL)
         return 0;
@@ -100,7 +97,7 @@ int ARMCII_Iov_check_same_allocation(void **ptrs, int count, int proc) {
     base   = mreg->slices[proc].base;
     extent = ((uint8_t*) base) + mreg->slices[proc].size;
 
-    for (i = 1; i < count; i++)
+    for (int i = 1; i < count; i++)
       if ( !(ptrs[i] >= base && ptrs[i] < extent) )
         return 0;
   }
@@ -176,10 +173,9 @@ int ARMCII_Iov_op_dispatch(enum ARMCII_Op_e op, void **src, void **dst, int coun
 int ARMCII_Iov_op_safe(enum ARMCII_Op_e op, void **src, void **dst, int count, int elem_count,
     MPI_Datatype type, int proc) {
 
-  int i;
   int flush_local = 0; /* used only for MPI-3 */
 
-  for (i = 0; i < count; i++) {
+  for (int i = 0; i < count; i++) {
     gmr_t *mreg;
     void *shr_ptr;
 
@@ -230,7 +226,6 @@ int ARMCII_Iov_op_safe(enum ARMCII_Op_e op, void **src, void **dst, int count, i
 int ARMCII_Iov_op_batched(enum ARMCII_Op_e op, void **src, void **dst, int count, int elem_count,
     MPI_Datatype type, int proc, int consrv, int blocking) {
 
-  int i;
   int flush_local = 1; /* used only for MPI-3 */
   gmr_t *mreg;
   void *shr_ptr;
@@ -251,7 +246,7 @@ int ARMCII_Iov_op_batched(enum ARMCII_Op_e op, void **src, void **dst, int count
   mreg = gmr_lookup(shr_ptr, proc);
   ARMCII_Assert_msg(mreg != NULL, "Invalid remote pointer");
 
-  for (i = 0; i < count; i++) {
+  for (int i = 0; i < count; i++) {
 
     if ( blocking && i > 0 &&
         ( consrv ||
@@ -331,7 +326,7 @@ int ARMCII_Iov_op_datatype(enum ARMCII_Op_e op, void **src, void **dst, int coun
 
     MPI_Get_address(dst_win_base, &base_rem);
 
-    for (i = 0; i < count; i++) {
+    for (int i = 0; i < count; i++) {
       MPI_Aint target_rem;
       MPI_Get_address(buf_loc[i], &disp_loc[i]);
       MPI_Get_address(buf_rem[i], &target_rem);
@@ -399,9 +394,8 @@ int ARMCII_Iov_op_datatype(enum ARMCII_Op_e op, void **src, void **dst, int coun
   * @return             Success 0, otherwise non-zero.
   */
 int PARMCI_PutV(armci_giov_t *iov, int iov_len, int proc) {
-  int v;
 
-  for (v = 0; v < iov_len; v++) {
+  for (int v = 0; v < iov_len; v++) {
     void **src_buf;
     int    overlapping, same_alloc;
 
@@ -439,9 +433,8 @@ int PARMCI_PutV(armci_giov_t *iov, int iov_len, int proc) {
   * @return             Success 0, otherwise non-zero.
   */
 int PARMCI_GetV(armci_giov_t *iov, int iov_len, int proc) {
-  int v;
 
-  for (v = 0; v < iov_len; v++) {
+  for (int v = 0; v < iov_len; v++) {
     void **dst_buf;
     int    overlapping, same_alloc;
 
@@ -480,9 +473,8 @@ int PARMCI_GetV(armci_giov_t *iov, int iov_len, int proc) {
   * @return             Success 0, otherwise non-zero.
   */
 int PARMCI_AccV(int datatype, void *scale, armci_giov_t *iov, int iov_len, int proc) {
-  int v;
 
-  for (v = 0; v < iov_len; v++) {
+  for (int v = 0; v < iov_len; v++) {
     void **src_buf;
     int    overlapping, same_alloc;
 
