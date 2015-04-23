@@ -248,11 +248,8 @@ int ARMCII_Iov_op_batched(enum ARMCII_Op_e op, void **src, void **dst, int count
 
   for (int i = 0; i < count; i++) {
 
-    if ( blocking && i > 0 &&
-        ( consrv ||
-         ( ARMCII_GLOBAL_STATE.iov_batched_limit > 0 && i % ARMCII_GLOBAL_STATE.iov_batched_limit == 0)
-        )
-       )
+    if ( consrv || ( ARMCII_GLOBAL_STATE.iov_batched_limit > 0 && 
+                     i % ARMCII_GLOBAL_STATE.iov_batched_limit == 0))
     {
       gmr_flush(mreg, proc, flush_local);
     }
