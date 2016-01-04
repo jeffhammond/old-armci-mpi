@@ -148,27 +148,27 @@ gmr_t *gmr_create(gmr_size_t local_size, void **base_ptrs, ARMCI_Group *group) {
                    mreg->window);
 
   {
-    void    *attr_ptr;
+    int     *attr_ptr;
     int     *attr_val;
     int      attr_flag;
     /* this function will always return flag=false in MPI-2 */
     MPI_Win_get_attr(mreg->window, MPI_WIN_MODEL, &attr_ptr, &attr_flag);
     if (attr_flag) {
       attr_val = (int*)attr_ptr;
-      if (world_me==0) {
-        if ( (*attr_val)==MPI_WIN_SEPARATE ) {
-          printf("MPI_WIN_MODEL = MPI_WIN_SEPARATE \n" );
-        } else if ( (*attr_val)==MPI_WIN_UNIFIED ) {
-#ifdef DEBUG
+      if ( (*attr_val)==MPI_WIN_UNIFIED ) {
+#if DEBUG
+        if (world_me==0) {
           printf("MPI_WIN_MODEL = MPI_WIN_UNIFIED \n" );
-#endif
-        } else {
-          printf("MPI_WIN_MODEL = %d (not UNIFIED or SEPARATE) \n", *attr_val );
         }
+#endif
+      } else if ( (*attr_val)==MPI_WIN_SEPARATE ) {
+        ARMCII_Error("MPI_WIN_MODEL = MPI_WIN_SEPARATE is not supported.\n");
+      } else {
+        ARMCII_Warning("MPI_WIN_MODEL = %d (not UNIFIED or SEPARATE) \n", *attr_val );
       }
     } else {
       if (world_me==0)
-        printf("MPI_WIN_MODEL attribute missing \n");
+        ARMCII_Warning("MPI_WIN_MODEL attribute missing \n");
     }
   }
 
