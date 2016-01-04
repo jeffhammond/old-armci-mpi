@@ -3,7 +3,6 @@
 # Exit on error
 set -ev
 
-os=`uname`
 TRAVIS_ROOT="$1"
 MPI_IMPL="$2"
 
