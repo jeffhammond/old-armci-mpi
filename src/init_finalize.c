@@ -194,20 +194,6 @@ int PARMCI_Init(void) {
       ARMCII_Warning("MPI Datatypes are broken in RMA in OpenMPI!!!!\n");
 #endif
 
-  /* Shared buffer handling method */
-
-  ARMCII_GLOBAL_STATE.shr_buf_method = ARMCII_SHR_BUF_NOGUARD;
-
-  var = ARMCII_Getenv("ARMCI_SHR_BUF_METHOD");
-  if (var != NULL) {
-    if (strcmp(var, "COPY") == 0)
-      ARMCII_GLOBAL_STATE.shr_buf_method = ARMCII_SHR_BUF_COPY;
-    else if (strcmp(var, "NOGUARD") == 0)
-      ARMCII_GLOBAL_STATE.shr_buf_method = ARMCII_SHR_BUF_NOGUARD;
-    else if (ARMCI_GROUP_WORLD.rank == 0)
-      ARMCII_Warning("Ignoring unknown value for ARMCI_SHR_BUF_METHOD (%s)\n", var);
-  }
-
   /* Use win_allocate or not, to work around MPI-3 RMA implementation bugs (now fixed) in MPICH. */
 
 #ifdef USE_WIN_ALLOCATE
@@ -291,7 +277,6 @@ int PARMCI_Init(void) {
       }
 
       printf("  IOV_CHECKS             = %s\n", ARMCII_GLOBAL_STATE.iov_checks             ? "TRUE" : "FALSE");
-      printf("  SHR_BUF_METHOD         = %s\n", ARMCII_Shr_buf_methods_str[ARMCII_GLOBAL_STATE.shr_buf_method]);
       printf("  NONCOLLECTIVE_GROUPS   = %s\n", ARMCII_GLOBAL_STATE.noncollective_groups   ? "TRUE" : "FALSE");
       printf("  CACHE_RANK_TRANSLATION = %s\n", ARMCII_GLOBAL_STATE.cache_rank_translation ? "TRUE" : "FALSE");
       printf("  DEBUG_ALLOC            = %s\n", ARMCII_GLOBAL_STATE.debug_alloc            ? "TRUE" : "FALSE");

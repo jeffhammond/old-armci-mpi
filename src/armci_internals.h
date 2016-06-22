@@ -64,11 +64,8 @@ enum ARMCII_Strided_methods_e { ARMCII_STRIDED_IOV, ARMCII_STRIDED_DIRECT };
 enum ARMCII_Iov_methods_e { ARMCII_IOV_AUTO, ARMCII_IOV_CONSRV,
                             ARMCII_IOV_BATCHED, ARMCII_IOV_DIRECT };
 
-enum ARMCII_Shr_buf_methods_e { ARMCII_SHR_BUF_COPY, ARMCII_SHR_BUF_NOGUARD };
-
 extern char ARMCII_Strided_methods_str[][10];
 extern char ARMCII_Iov_methods_str[][10];
-extern char ARMCII_Shr_buf_methods_str[][10];
 
 typedef struct {
   int           init_count;             /* Number of times ARMCI_Init has been called                           */
@@ -90,7 +87,6 @@ typedef struct {
 
   enum ARMCII_Strided_methods_e strided_method; /* Strided transfer method              */
   enum ARMCII_Iov_methods_e     iov_method;     /* IOV transfer method                  */
-  enum ARMCII_Shr_buf_methods_e shr_buf_method; /* Shared buffer management method      */
 } global_state_t;
 
 

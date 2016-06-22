@@ -157,7 +157,7 @@ gmr_t *gmr_create(gmr_size_t local_size, void **base_ptrs, ARMCI_Group *group) {
   } else {
     if (world_me==0) printf("MPI_WIN_MODEL = UNAVAILABLE\n" );
   }
-  mreg->is_unified = is_unified;
+  mreg->is_unified = is_unified==1 ? 1 : 0; /* or !!(is_unified==1) */
 
   /* Append the new region onto the region list */
   if (gmr_list == NULL) {

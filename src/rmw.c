@@ -44,13 +44,12 @@ int PARMCI_Rmw(int op, void *ploc, void *prem, int value, int proc) {
   MPI_Op       rop;
   gmr_t *src_mreg, *dst_mreg;
 
-  /* If NOGUARD is set, assume the buffer is not shared */
-  if (ARMCII_GLOBAL_STATE.shr_buf_method != ARMCII_SHR_BUF_NOGUARD)
+  dst_mreg = gmr_lookup(prem, proc);
+
+  if ( !(dst_mreg->is_unified) )
     src_mreg = gmr_lookup(ploc, ARMCI_GROUP_WORLD.rank);
   else
     src_mreg = NULL;
-
-  dst_mreg = gmr_lookup(prem, proc);
 
   ARMCII_Assert_msg(dst_mreg != NULL, "Invalid remote pointer");
 
