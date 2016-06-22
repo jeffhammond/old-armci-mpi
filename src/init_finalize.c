@@ -196,7 +196,7 @@ int PARMCI_Init(void) {
 
   /* Shared buffer handling method */
 
-  ARMCII_GLOBAL_STATE.shr_buf_method = ARMCII_SHR_BUF_COPY;
+  ARMCII_GLOBAL_STATE.shr_buf_method = ARMCII_SHR_BUF_NOGUARD;
 
   var = ARMCII_Getenv("ARMCI_SHR_BUF_METHOD");
   if (var != NULL) {
