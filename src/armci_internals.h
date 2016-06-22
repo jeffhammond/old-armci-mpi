@@ -115,6 +115,8 @@ char *ARMCII_Getenv(const char *varname);
 int   ARMCII_Getenv_bool(const char *varname, int default_value);
 int   ARMCII_Getenv_int(const char *varname, int default_value);
 
+int   ARMCII_Is_win_unified(MPI_Win win);
+
 /* Synchronization */
 
 void ARMCII_Sync_local(void);

@@ -147,29 +147,15 @@ gmr_t *gmr_create(gmr_size_t local_size, void **base_ptrs, ARMCI_Group *group) {
   MPI_Win_lock_all((ARMCII_GLOBAL_STATE.rma_nocheck) ? MPI_MODE_NOCHECK : 0,
                    mreg->window);
 
-  {
-    void    *attr_ptr;
-    int     *attr_val;
-    int      attr_flag;
-    /* this function will always return flag=false in MPI-2 */
-    MPI_Win_get_attr(mreg->window, MPI_WIN_MODEL, &attr_ptr, &attr_flag);
-    if (attr_flag) {
-      attr_val = (int*)attr_ptr;
-      if (world_me==0) {
-        if ( (*attr_val)==MPI_WIN_SEPARATE ) {
-          printf("MPI_WIN_MODEL = MPI_WIN_SEPARATE \n" );
-        } else if ( (*attr_val)==MPI_WIN_UNIFIED ) {
+  int is_unified = ARMCII_Is_win_unified(mreg->window);
+  if ( is_unified == 1) {
 #ifdef DEBUG
-          printf("MPI_WIN_MODEL = MPI_WIN_UNIFIED \n" );
+    if (world_me==0) printf("MPI_WIN_MODEL = MPI_WIN_UNIFIED\n" );
 #endif
-        } else {
-          printf("MPI_WIN_MODEL = %d (not UNIFIED or SEPARATE) \n", *attr_val );
-        }
-      }
-    } else {
-      if (world_me==0)
-        printf("MPI_WIN_MODEL attribute missing \n");
-    }
+  } else if ( is_unified == 0) {
+    if (world_me==0) printf("MPI_WIN_MODEL = MPI_WIN_SEPARATE\n" );
+  } else {
+    if (world_me==0) printf("MPI_WIN_MODEL = UNAVAILABLE\n" );
   }
 
   /* Append the new region onto the region list */
