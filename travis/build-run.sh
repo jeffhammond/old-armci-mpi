@@ -36,8 +36,13 @@ esac
 
 # Configure and build
 ./autogen.sh
-./configure --disable-static --enable-win-allocate
+./configure --disable-static --enable-win-allocate --prefix=/tmp
 
 # Run unit tests
 export ARMCI_VERBOSE=1
+make
+make checkprogs
 make check
+
+# Verify that installation works
+make install

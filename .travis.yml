@@ -8,6 +8,11 @@ compiler:
   # nothing in ARMCI-MPI should be compiler-dependent...
   - clang
   - gcc
+cache:
+  directories:
+    # TRAVIS_ROOT=$HOME/travis may not be defined yet
+    - $HOME/travis/mpich
+    - $HOME/travis/open-mpi
 matrix:
   allow_failures:
     - env: MPI_IMPL=openmpi
