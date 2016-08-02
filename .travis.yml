@@ -11,8 +11,8 @@ compiler:
 cache:
   directories:
     # TRAVIS_ROOT=$HOME/travis may not be defined yet
-    - $HOME/travis/mpich
-    - $HOME/travis/open-mpi
+    - $HOME/deps/mpich
+    - $HOME/deps/open-mpi
 matrix:
   allow_failures:
     - env: MPI_IMPL=openmpi
@@ -94,8 +94,8 @@ env:
     ARMCI_IOV_METHOD=BATCHED
     ARMCI_USE_WIN_ALLOCATE=1
 before_install:
-  - export TRAVIS_ROOT=$HOME/travis
-  - mkdir $TRAVIS_ROOT
+  - export TRAVIS_ROOT=$HOME/deps
+  - mkdir -p $TRAVIS_ROOT
   - sh ./travis/install-autotools.sh $TRAVIS_ROOT
 install:
   - sh ./travis/install-mpi.sh $TRAVIS_ROOT $MPI_IMPL
