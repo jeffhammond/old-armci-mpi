@@ -2,11 +2,11 @@ sudo: false
 language: c
 os:
   # osx starts faster because homebrew installs beat building from source
-  - osx
+  #- osx
   - linux
 compiler:
   # nothing in ARMCI-MPI should be compiler-dependent...
-  - clang
+  #- clang
   - gcc
 cache:
   directories:
