@@ -46,6 +46,7 @@ case "$os" in
                     make install
                 else
                     echo "MPICH already installed"
+                    find $TRAVIS_ROOT/mpich
                 fi
                 ;;
             openmpi)
@@ -76,6 +77,7 @@ case "$os" in
                     make install
                 else
                     echo "Open-MPI already installed"
+                    find $TRAVIS_ROOT/open-mpi
                 fi
                 ;;
             *)

@@ -24,7 +24,7 @@ esac
 # Capture details of build
 case "$MPI_IMPL" in
     mpich)
-        mpichversion
+        #mpichversion
         mpicc -show
         ;;
     openmpi)
