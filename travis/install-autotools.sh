@@ -5,6 +5,17 @@ set -x
 
 TOP="$HOME/deps"
 
+
+if [ "${TRAVIS_OS_NAME}" = "osx" ] ; then
+    brew upgrade libtool
+    which glibtool
+    which glibtoolize
+    glibtool --version
+    mkdir -p ${TOP}/bin
+    ln -s `which glibtool` ${TOP}/bin/libtool
+    ln -s `which glibtoolize` ${TOP}/bin/libtoolize
+fi
+
 if [ "${TRAVIS_OS_NAME}" = "linux" ] ; then
   MAKE_JNUM=2
   M4_VERSION=1.4.17
