@@ -5,15 +5,13 @@
 set -e
 set -x
 
-os=`uname`
-TRAVIS_ROOT="$1"
-MPI_IMPL="$2"
+MPI_IMPL="$1"
 
 # this is where updated Autotools will be for Linux
-export PATH=$TRAVIS_ROOT/bin:$PATH
+export PATH=$HOME/deps/bin:$PATH
 
-case "$os" in
-    Darwin)
+case "$TRAVIS_OS_NAME" in
+    osx)
         echo "Mac"
         brew update
         case "$MPI_IMPL" in
@@ -32,25 +30,25 @@ case "$os" in
         esac
     ;;
 
-    Linux)
+    linux)
         echo "Linux"
         case "$MPI_IMPL" in
             mpich)
-                if [ ! -f "$TRAVIS_ROOT/mpich/bin/mpicc" ]; then
+                if [ ! -f "$HOME/deps/mpich/bin/mpicc" ]; then
                     wget --no-check-certificate http://www.mpich.org/static/downloads/3.2/mpich-3.2.tar.gz
                     tar -xzf mpich-3.2.tar.gz
                     cd mpich-3.2
                     mkdir build && cd build
-                    ../configure CFLAGS="-w" --prefix=$TRAVIS_ROOT/mpich --disable-fortran --disable-static
+                    ../configure CFLAGS="-w" --prefix=$HOME/deps/mpich --disable-fortran --disable-static
                     make -j4
                     make install
                 else
                     echo "MPICH already installed"
-                    find $TRAVIS_ROOT/mpich
+                    find $HOME/deps/mpich
                 fi
                 ;;
             openmpi)
-                if [ ! -f "$TRAVIS_ROOT/open-mpi/bin/mpicc" ]; then
+                if [ ! -f "$HOME/deps/open-mpi/bin/mpicc" ]; then
                     #wget --no-check-certificate https://www.open-mpi.org/software/ompi/v1.10/downloads/openmpi-1.10.2.tar.bz2
                     #tar -xjf openmpi-1.10.2.tar.bz2
                     #cd openmpi-1.10.2
@@ -58,7 +56,7 @@ case "$os" in
                     tar -xjf openmpi-2.0.0.tar.bz2
                     cd openmpi-2.0.0
                     mkdir build && cd build
-                    ../configure CFLAGS="-w" --prefix=$TRAVIS_ROOT/open-mpi \
+                    ../configure CFLAGS="-w" --prefix=$HOME/deps/open-mpi \
                                 --without-verbs --without-fca --without-mxm --without-ucx \
                                 --without-portals4 --without-psm --without-psm2 \
                                 --without-libfabric --without-usnic \
@@ -77,7 +75,7 @@ case "$os" in
                     make install
                 else
                     echo "Open-MPI already installed"
-                    find $TRAVIS_ROOT/open-mpi
+                    find $HOME/deps/open-mpi
                 fi
                 ;;
             *)

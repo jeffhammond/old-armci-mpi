@@ -2,15 +2,15 @@ sudo: false
 language: c
 os:
   # osx starts faster because homebrew installs beat building from source
-  #- osx
+  - osx
   - linux
 compiler:
   # nothing in ARMCI-MPI should be compiler-dependent...
-  #- clang
+  - clang
   - gcc
 cache:
   directories:
-    # TRAVIS_ROOT=$HOME/travis may not be defined yet
+    - $HOME/deps
     - $HOME/deps/mpich
     - $HOME/deps/open-mpi
 matrix:
@@ -94,13 +94,12 @@ env:
     ARMCI_IOV_METHOD=BATCHED
     ARMCI_USE_WIN_ALLOCATE=1
 before_install:
-  - export TRAVIS_ROOT=$HOME/deps
-  - mkdir -p $TRAVIS_ROOT
-  - sh ./travis/install-autotools.sh $TRAVIS_ROOT
+  - mkdir -p $HOME/deps
+  - sh ./travis/install-autotools.sh
 install:
-  - sh ./travis/install-mpi.sh $TRAVIS_ROOT $MPI_IMPL
+  - sh ./travis/install-mpi.sh $MPI_IMPL
 script:
-  - sh ./travis/build-run.sh $TRAVIS_ROOT $MPI_IMPL
+  - sh ./travis/build-run.sh $MPI_IMPL
 after_failure:
   - cat ./config.log
   - cat ./test-suite.log
