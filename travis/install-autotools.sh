@@ -7,7 +7,7 @@ TOP="$HOME/deps"
 
 
 if [ "${TRAVIS_OS_NAME}" = "osx" ] ; then
-    brew upgrade libtool
+    brew install libtool || brew upgrade libtool || true
     which glibtool
     which glibtoolize
     glibtool --version
