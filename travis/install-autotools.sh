@@ -5,15 +5,16 @@ set -x
 
 TOP="$HOME/deps"
 
-#if [ "${TRAVIS_OS_NAME}" = "osx" ] ; then
-#    brew install libtool || brew upgrade libtool || true
-#    which glibtool
-#    which glibtoolize
-#    glibtool --version
-#    mkdir -p ${TOP}/bin
-#    ln -s `which glibtool` ${TOP}/bin/libtool
-#    ln -s `which glibtoolize` ${TOP}/bin/libtoolize
-#fi
+if [ "${TRAVIS_OS_NAME}" = "osx" ] ; then
+    #brew install libtool || brew upgrade libtool || true
+    brew uninstall libtool && brew install libtool
+    which glibtool
+    which glibtoolize
+    glibtool --version
+    mkdir -p ${TOP}/bin
+    ln -s `which glibtool` ${TOP}/bin/libtool
+    ln -s `which glibtoolize` ${TOP}/bin/libtoolize
+fi
 
 if [ "${TRAVIS_OS_NAME}" = "linux" ] ; then
   MAKE_JNUM=2
