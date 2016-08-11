@@ -16,6 +16,7 @@ case "$TRAVIS_OS_NAME" in
         brew update
         case "$MPI_IMPL" in
             mpich)
+                brew info mpich
                 brew install mpich
                 ;;
             openmpi)
@@ -31,6 +32,7 @@ case "$TRAVIS_OS_NAME" in
     ;;
 
     linux)
+        sh ./travis/install-autotools.sh
         echo "Linux"
         case "$MPI_IMPL" in
             mpich)

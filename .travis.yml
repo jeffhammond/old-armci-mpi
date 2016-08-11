@@ -95,7 +95,6 @@ env:
     ARMCI_USE_WIN_ALLOCATE=1
 before_install:
   - mkdir -p $HOME/deps
-  - sh ./travis/install-autotools.sh
 install:
   - sh ./travis/install-mpi.sh $MPI_IMPL
 script:
