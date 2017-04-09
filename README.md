@@ -1,12 +1,18 @@
 # Authors
 
-James Dinan  (MPI-2 implementation)
-Jeff Hammond (MPI-3 implementation)
+* James Dinan  (MPI-2 implementation)
+* Jeff Hammond (MPI-3 implementation)
 
 # Introduction
 
 This project provides a full, high performance, portable implementation of the
 ARMCI runtime system using MPI's remote memory access (RMA) functionality.
+
+# Quality Assurance
+
+[![Build Status](https://travis-ci.org/jeffhammond/armci-mpi.svg?branch=mpi3rma)](https://travis-ci.org/jeffhammond/armci-mpi)
+
+See Travis for failure details.  All recent failures have been caused by dependencies (system toolchain or MPI library).
 
 # Installing Only ARMCI-MPI
 
@@ -25,7 +31,7 @@ following MPI-2 implementations are known to work correctly with ARMCI-MPI:
  * MVAPICH2 1.6
  * Cray MPI on Cray XE6
  * IBM MPI on BG/P (set `ARMCI_STRIDED_METHOD=IOV` and `ARMCI_IOV_METHOD=BATCHED` for _performance reasons_)
- * OpenMPI 1.5.4 (set `ARMCI_STRIDED_METHOD=IOV` and `ARMCI_IOV_METHOD=BATCHED` for _correctness reasons_)
+ * Open-MPI 1.5.4 (set `ARMCI_STRIDED_METHOD=IOV` and `ARMCI_IOV_METHOD=BATCHED` for _correctness reasons_)
 
 The following MPI-2 implementations are known to fail with ARMCI-MPI:
  * MVAPICH2 prior to 1.6
@@ -36,9 +42,9 @@ with ARMCI-MPI (`mpi3rma` branch):
  * MVAPICH2 2.0a and later on Linux InfiniBand clusters.
  * CrayMPI 6.1.0 and later on Cray XC30.
  * SGI MPT 2.09 on SGI SMPs.
- * OpenMPI development version on Mac (set `ARMCI_STRIDED_METHOD=IOV` and `ARMCI_IOV_METHOD=BATCHED`)
+ * Open-MPI development version on Mac (set `ARMCI_STRIDED_METHOD=IOV` and `ARMCI_IOV_METHOD=BATCHED`)
  
-Note that a bug in MPICH that propagated to MVAPICH2, Cray MPI and Intel MPI affects correctness
+Note that a bug in MPICH 3.0 or 3.1 that propagated to MVAPICH2, Cray MPI and Intel MPI affects correctness
 when windows are backed by shared-memory.  This bug affects `ARMCI_Rmw` and is avoided with the
 default settings, which use `MPI_Win_create`.  This may negatively affect performance in some
 cases and prevents one from using Casper.  To utilize `MPI_Win_allocate`, do one of the following:
@@ -104,15 +110,15 @@ Boolean environment variables are enabled when set to a value beginning with
 
 ##Debugging Options
 
-ARMCI_VERBOSE (boolean)
+`ARMCI_VERBOSE` (boolean)
 
   Enable extra status output from ARMCI-MPI.
 
-ARMCI_DEBUG_ALLOC (boolean)
+`ARMCI_DEBUG_ALLOC` (boolean)
 
   Turn on extra shared allocation debugging.
 
-ARMCI_FLUSH_BARRIERS (boolean) (deprecated)
+`ARMCI_FLUSH_BARRIERS` (boolean) (deprecated)
 
   Enable/disable extra communication flushing in ARMCI_Barrier.  Extra flushes
   are present to help make unsafe DLA safer.  (This option is deprecated with
@@ -120,28 +126,28 @@ ARMCI_FLUSH_BARRIERS (boolean) (deprecated)
 
 ## Performance Options
 
-ARMCI_CACHE_RANK_TRANSLATION (boolean)
+`ARMCI_CACHE_RANK_TRANSLATION` (boolean)
 
   Create a table to more quickly translate between absolute and group ranks.
 
-ARMCI_PROGRESS_THREAD (boolean)
+`ARMCI_PROGRESS_THREAD` (boolean)
 
   Create a Pthread to poke the MPI progress engine.
 
-ARMCI_PROGRESS_USLEEP (int)
+`ARMCI_PROGRESS_USLEEP` (int)
 
   Argument to `usleep()` to pause the progress polling loop.
 
 ## Noncollective Groups
 
-ARMCI_NONCOLLECTIVE_GROUPS (boolean)
+`ARMCI_NONCOLLECTIVE_GROUPS` (boolean)
 
   Enable noncollective ARMCI group formation; group creation is collective on
   the output group rather than the parent group.
 
 ## Shared Buffer Protection
 
-ARMCI_SHR_BUF_METHOD = { COPY (default), NOGUARD }
+`ARMCI_SHR_BUF_METHOD` = { `COPY` (default), `NOGUARD` }
 
   ARMCI policy for managing shared origin buffers in communication operations:
   lock the buffer (unsafe, but fast), copy the buffer (safe), or don't guard
@@ -150,13 +156,13 @@ ARMCI_SHR_BUF_METHOD = { COPY (default), NOGUARD }
 
 ## Strided Options
 
-ARMCI_STRIDED_METHOD = { DIRECT (default), IOV }
+`ARMCI_STRIDED_METHOD` = { `DIRECT` (default), `IOV` }
 
   Select the method for processing strided operations.
 
 ## I/O Vector Options
 
-ARMCI_IOV_METHOD = { AUTO (default), CONSRV, BATCHED, DIRECT }
+`ARMCI_IOV_METHOD` = { `AUTO` (default), `CONSRV`, `BATCHED`, `DIRECT` }
 
   Select the IO vector communication strategy: automatic; a "conservative"
   implementation that does lock/unlock around each operation; an implementation
@@ -164,12 +170,12 @@ ARMCI_IOV_METHOD = { AUTO (default), CONSRV, BATCHED, DIRECT }
   direct implementation that generates datatypes for the origin and target and
   issues a single operation using them.
 
-ARMCI_IOV_CHECKS (boolean)
+`ARMCI_IOV_CHECKS` (boolean)
 
   Enable (expensive) IOV safety/debugging checks (not recommended for
   performance runs).
 
-ARMCI_IOV_BATCHED_LIMIT = { 0 (default), 1, ... }
+`ARMCI_IOV_BATCHED_LIMIT` = { 0 (default), 1, ... }
 
   Set the maximum number of one-sided operations per epoch for the BATCHED IOV
   method.  Zero (default) is unlimited.

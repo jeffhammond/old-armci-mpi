@@ -5,34 +5,66 @@ os:
   - osx
   - linux
 compiler:
-<<<<<<< HEAD
-  # nothing in ARMCI-MPI should be compiler-dependent...
-=======
->>>>>>> github/master
   - clang
   - gcc
 matrix:
   allow_failures:
     - env: MPI_IMPL=openmpi
-<<<<<<< HEAD
+      os: osx
     - env: MPI_IMPL=openmpi
            ARMCI_STRIDED_METHOD=DIRECT
            ARMCI_IOV_METHOD=DIRECT
            ARMCI_USE_WIN_ALLOCATE=0
+      os: osx
     - env: MPI_IMPL=openmpi
            ARMCI_STRIDED_METHOD=DIRECT
            ARMCI_IOV_METHOD=DIRECT
            ARMCI_USE_WIN_ALLOCATE=1
+      os: osx
     - env: MPI_IMPL=openmpi
            ARMCI_STRIDED_METHOD=DIRECT
            ARMCI_IOV_METHOD=DIRECT
            ARMCI_USE_WIN_ALLOCATE=0
            ARMCI_NO_FLUSH_LOCAL=1
+      os: osx
     - env: MPI_IMPL=openmpi
            ARMCI_STRIDED_METHOD=DIRECT
            ARMCI_IOV_METHOD=DIRECT
            ARMCI_USE_WIN_ALLOCATE=1
            ARMCI_NO_FLUSH_LOCAL=1
+      os: osx
+    - env: MPI_IMPL=openmpi
+           ARMCI_STRIDED_METHOD=DIRECT
+           ARMCI_IOV_METHOD=DIRECT
+           ARMCI_USE_WIN_ALLOCATE=0
+      os: osx
+    - env: MPI_IMPL=openmpi
+           ARMCI_STRIDED_METHOD=DIRECT
+           ARMCI_IOV_METHOD=DIRECT
+           ARMCI_USE_WIN_ALLOCATE=1
+      os: osx
+    - env: MPI_IMPL=openmpi
+           ARMCI_STRIDED_METHOD=DIRECT
+           ARMCI_IOV_METHOD=DIRECT
+           ARMCI_NO_FLUSH_LOCAL=1
+           ARMCI_USE_WIN_ALLOCATE=0
+      os: osx
+    - env: MPI_IMPL=openmpi
+           ARMCI_STRIDED_METHOD=DIRECT
+           ARMCI_IOV_METHOD=DIRECT
+           ARMCI_NO_FLUSH_LOCAL=1
+           ARMCI_USE_WIN_ALLOCATE=1
+      os: osx
+    - env: MPI_IMPL=openmpi
+           ARMCI_STRIDED_METHOD=IOV
+           ARMCI_IOV_METHOD=BATCHED
+           ARMCI_USE_WIN_ALLOCATE=0
+      os: osx
+    - env: MPI_IMPL=openmpi
+           ARMCI_STRIDED_METHOD=IOV
+           ARMCI_IOV_METHOD=BATCHED
+           ARMCI_USE_WIN_ALLOCATE=1
+      os: osx
 env:
   #
   # Test the default config since that is what Debian users will get.
@@ -92,22 +124,6 @@ env:
     ARMCI_STRIDED_METHOD=IOV
     ARMCI_IOV_METHOD=BATCHED
     ARMCI_USE_WIN_ALLOCATE=1
-=======
-env:
-  - MPI_IMPL=mpich
-    ARMCI_STRIDED_METHOD=DIRECT
-    ARMCI_IOV_METHOD=DIRECT
-  - MPI_IMPL=openmpi
-    ARMCI_STRIDED_METHOD=DIRECT
-    ARMCI_IOV_METHOD=DIRECT
-# without datatypes
-  - MPI_IMPL=mpich
-    ARMCI_STRIDED_METHOD=IOV
-    ARMCI_IOV_METHOD=BATCHED
-  - MPI_IMPL=openmpi
-    ARMCI_STRIDED_METHOD=IOV
-    ARMCI_IOV_METHOD=BATCHED
->>>>>>> github/master
 before_install:
   - export TRAVIS_ROOT=$HOME/travis
   - mkdir $TRAVIS_ROOT

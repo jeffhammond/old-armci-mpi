@@ -16,14 +16,23 @@
 #include <pthread.h>
 
 #if defined(HAVE_NANOSLEEP)
-#include <time.h>
+
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 199309L
+#endif
+#include <time.h> /* nanosleep */
+
 #elif defined(HAVE_USLEEP)
+
 #ifndef _BSD_SOURCE
 #define _BSD_SOURCE
 #endif
 #include <unistd.h> /* usleep */
+
 #else
+
 #warning No naptime available!
+
 #endif
 
 int progress_active;
@@ -211,11 +220,7 @@ int PARMCI_Init(void) {
 
   /* Use win_allocate or not, to work around MPI-3 RMA implementation bugs (now fixed) in MPICH. */
 
-#ifdef USE_WIN_ALLOCATE
   int win_alloc_default = 1;
-#else
-  int win_alloc_default = 0;
-#endif
   ARMCII_GLOBAL_STATE.use_win_allocate=ARMCII_Getenv_bool("ARMCI_USE_WIN_ALLOCATE", win_alloc_default);
 
   /* Pass alloc_shm to win_allocate / alloc_mem */
