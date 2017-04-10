@@ -154,6 +154,17 @@ if test "$safety_enabled" = "no"; then
    AC_DEFINE(NO_SEATBELTS,1,[Defined when safety checks are disabled])
 fi
 
+## MPI-2 RMA support
+AC_ARG_ENABLE(mpi2, AC_HELP_STRING([--enable-mpi2],[Enable to use MPI-2 RMA support (default: MPI-3 RMA)]),
+                 [ mpi2_enabled=$enableval ],
+                 [ mpi2_enabled=yes ])
+AC_MSG_CHECKING(whether MPI-2 RMA is used)
+AC_MSG_RESULT($mpi2_enabled)
+if test "x$mpi2_enabled" = "xyes"; then
+   AC_DEFINE(USE_MPI2,1,[Defined when MPI-2 RMA support is used.])
+fi
+AM_CONDITIONAL([USE_MPI2], [test "x$mpi2_enabled" = xyes])
+
 ## ARMCI Groups
 AC_ARG_ENABLE(armci-group, AC_HELP_STRING([--enable-armci-group],[Enable ARMCI subset-collective group formation]),
                  [ armci_group_enabled=$enableval ],

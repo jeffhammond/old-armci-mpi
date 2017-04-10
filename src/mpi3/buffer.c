@@ -9,9 +9,8 @@
 
 #include <armci.h>
 #include <armci_internals.h>
-#include <gmr.h>
 #include <debug.h>
-
+#include <gmr.h>
 
 /** Prepare a set of buffers for use with a put operation.  The returned set of
   * buffers is guaranteed to be in private space.  Copies will be made if needed,
@@ -270,7 +269,7 @@ int ARMCII_Buf_acc_is_scaled(int datatype, void *scale) {
       break;
 
     case ARMCI_ACC_CPL:
-      if (fabsf(((float*)scale)[0]-1.0f) < FLT_EPSILON && 
+      if (fabsf(((float*)scale)[0]-1.0f) < FLT_EPSILON &&
           fabsf(((float*)scale)[1]-0.0f) < FLT_EPSILON)
         return 0;
       break;

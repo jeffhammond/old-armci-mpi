@@ -7,8 +7,8 @@
 
 #include <armci.h>
 #include <armci_internals.h>
-#include <gmr.h>
 #include <debug.h>
+#include <gmr.h>
 
 
 /* -- begin weak symbols block -- */

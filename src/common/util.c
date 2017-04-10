@@ -37,15 +37,18 @@ void ARMCI_Error(const char *msg, int code) {
   * group!).
   */
 void PARMCI_Barrier(void) {
-  gmr_t *cur_mreg = gmr_list;
-
   PARMCI_AllFence();
   MPI_Barrier(ARMCI_GROUP_WORLD.comm);
+#ifndef USE_MPI2
+  {
+    gmr_t *cur_mreg = gmr_list;
 
-  while (cur_mreg) {
-    gmr_sync(cur_mreg);
-    cur_mreg = cur_mreg->next;
+    while (cur_mreg) {
+      gmr_sync(cur_mreg);
+      cur_mreg = cur_mreg->next;
+    }
   }
+#endif
 }
 
 /* -- begin weak symbols block -- */
@@ -65,12 +68,14 @@ void PARMCI_Barrier(void) {
   * @param[in] proc Process to target
   */
 void PARMCI_Fence(int proc) {
+#ifndef USE_MPI2
   gmr_t *cur_mreg = gmr_list;
 
   while (cur_mreg) {
     gmr_flush(cur_mreg, proc, 0);
     cur_mreg = cur_mreg->next;
   }
+#endif
   return;
 }
 
@@ -89,12 +94,14 @@ void PARMCI_Fence(int proc) {
   * a no-op since get/put/acc already guarantee remote completion.
   */
 void PARMCI_AllFence(void) {
+#ifndef USE_MPI2
   gmr_t *cur_mreg = gmr_list;
 
   while (cur_mreg) {
     gmr_flushall(cur_mreg, 0);
     cur_mreg = cur_mreg->next;
   }
+#endif
   return;
 }
 
@@ -121,14 +128,31 @@ int ARMCI_Uses_shm_grp(ARMCI_Group *group) {
   * @param[in]  size Number of bytes to copy
   */
 void ARMCI_Copy(void *src, void *dst, int size) {
+#ifdef USE_MPI2
+#ifndef COPY_WITH_SENDRECV
+  memcpy(dst, src, size);
+#else
+  static MPI_Comm copy_comm = MPI_COMM_NULL;
+
+  if (copy_comm == MPI_COMM_NULL)
+    MPI_Comm_dup(MPI_COMM_SELF, &copy_comm);
+
+  MPI_Sendrecv(src, size, MPI_BYTE,
+      0 /* rank */, 0 /* tag */,
+      dst, size, MPI_BYTE,
+      0 /* rank */, 0 /* tag */,
+      copy_comm, MPI_STATUS_IGNORE);
+#endif
+#else
   memmove(dst, src, size);
+#endif
 }
 
 
 /** Zero out the given buffer.
   */
 void ARMCII_Bzero(void *buf, armci_size_t size) {
-	/* Jeff: Why not use memset? */
+  /* Jeff: Why not use memset? */
   armci_size_t i;
   uint8_t *buf_b = (uint8_t *)buf;
 

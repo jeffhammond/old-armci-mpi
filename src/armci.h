@@ -7,8 +7,6 @@
 
 #include <mpi.h>
 
-#define ARMCI_MPI 3
-
 enum  ARMCI_Acc_e { ARMCI_ACC_INT /*     int */, ARMCI_ACC_LNG /*           long */,
                     ARMCI_ACC_FLT /*   float */, ARMCI_ACC_DBL /*         double */,
                     ARMCI_ACC_CPL /* complex */, ARMCI_ACC_DCP /* double complex */ };

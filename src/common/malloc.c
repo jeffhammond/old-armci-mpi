@@ -7,9 +7,9 @@
 #include <string.h>
 #include <mpi.h>
 
-#include <debug.h>
 #include <armci.h>
 #include <armci_internals.h>
+#include <debug.h>
 #include <gmr.h>
 
 
@@ -128,7 +128,10 @@ int ARMCI_Free_group(void *ptr, ARMCI_Group *group) {
 void *PARMCI_Malloc_local(armci_size_t size) {
   void *buf;
 
+  if (size <= 0) return NULL;
+
   MPI_Alloc_mem((MPI_Aint) size, MPI_INFO_NULL, &buf);
+  ARMCII_Assert(buf != NULL);
 
   if (ARMCII_GLOBAL_STATE.debug_alloc) {
     ARMCII_Bzero(buf, size);

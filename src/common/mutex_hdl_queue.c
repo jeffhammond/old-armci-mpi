@@ -7,8 +7,8 @@
 #include <mpi.h>
 
 #include <armci.h>
-#include <armci_internals.h>
 #include <armcix.h>
+#include <armci_internals.h>
 #include <debug.h>
 
 #define ARMCI_MUTEX_TAG 100

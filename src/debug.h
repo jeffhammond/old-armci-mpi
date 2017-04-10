@@ -5,8 +5,10 @@
 #ifndef _DEBUG_H_
 #define _DEBUG_H_
 
-#include <stdarg.h>
 #include <armciconf.h>
+
+#include <stdarg.h>
+
 #include <armci_internals.h>
 
 enum debug_cats_e {

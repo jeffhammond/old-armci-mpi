@@ -5,7 +5,6 @@
 #ifndef _ARMCIX_H_
 #define _ARMCIX_H_
 
-#include <armci.h>
 #include <armciconf.h>
 
 #if   HAVE_STDINT_H
@@ -13,6 +12,25 @@
 #elif HAVE_INTTYPES_H
 #  include <inttypes.h>
 #endif
+
+#include <armci.h>
+
+/******************************* MPI-2 RMA only *******************************/
+
+/** Access mode extensions: set the access mode for an ARMCI allocation,
+  * enabling runtime layer optimizations.
+  */
+
+enum armcix_access_mode_e {
+  ARMCIX_MODE_ALL           = 0x1,  /* All access types permitted          */
+  ARMCIX_MODE_CONFLICT_FREE = 0x2,  /* Operations do not conflict          */
+  ARMCIX_MODE_NO_LOAD_STORE = 0x4   /* Load/store operations not permitted */
+};
+
+int ARMCIX_Mode_set(int mode, void *ptr, ARMCI_Group *group);
+int ARMCIX_Mode_get(void *ptr);
+
+/******************************* MPI-2 RMA only *******************************/
 
 /** Processor group extensions.
   */

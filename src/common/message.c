@@ -2,14 +2,16 @@
  * Copyright (C) 2010. See COPYRIGHT in top-level directory.
  */
 
+#include <armciconf.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <mpi.h>
 
-#include <debug.h>
 #include <armci.h>
 #include <armci_internals.h>
+#include <debug.h>
 
 /** Query process rank from messaging (MPI) layer.
   */
@@ -108,6 +110,10 @@ void armci_msg_bcast_scope(int scope, void *buffer, int len, int root) {
   */
 void parmci_msg_barrier(void) {
   MPI_Barrier(ARMCI_GROUP_WORLD.comm);
+
+  if (ARMCII_GLOBAL_STATE.debug_flush_barriers) {
+    ARMCII_Sync_local();
+  }
 }
 
 
@@ -127,6 +133,10 @@ void parmci_msg_barrier(void) {
   */
 void parmci_msg_group_barrier(ARMCI_Group *group) {
   MPI_Barrier(group->comm);
+
+  if (ARMCII_GLOBAL_STATE.debug_flush_barriers) {
+    ARMCII_Sync_local();
+  }
 }
 
 

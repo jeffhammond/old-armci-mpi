@@ -5,7 +5,6 @@
 #ifndef HAVE_ARMCI_INTERNALS_H
 #define HAVE_ARMCI_INTERNALS_H
 
-#include <armci.h>
 #include <armciconf.h>
 
 #if   HAVE_STDINT_H
@@ -17,6 +16,8 @@
 #ifdef HAVE_PTHREADS
 #  include <pthread.h>
 #endif
+
+#include <armci.h>
 
 /* Likely/Unlikely macros borrowed from MPICH:
  */
@@ -73,15 +74,15 @@ extern char ARMCII_Shr_buf_methods_str[][10];
 typedef struct {
   int           init_count;             /* Number of times ARMCI_Init has been called                           */
   int           debug_alloc;            /* Do extra debuggin on memory allocation                               */
+  int           debug_flush_barriers;   /* Flush all windows on a barrier (MPI-2 RMA implementation only)       */
   int           iov_checks;             /* Disable IOV same allocation and overlapping checks                   */
   int           iov_batched_limit;      /* Max number of ops per epoch for BATCHED IOV method                   */
   int           noncollective_groups;   /* Use noncollective group creation algorithm                           */
   int           cache_rank_translation; /* Enable caching of translation between absolute and group ranks       */
   int           verbose;                /* ARMCI should produce extra status output                             */
-#ifdef HAVE_PTHREADS
+  /* the following only apply to the MPI-3 RMA implementation */
   int           progress_thread;        /* Create progress thread                                               */
   int           progress_usleep;        /* Argument to usleep() to throttling polling                           */
-#endif
   int           use_win_allocate;       /* Use win_allocate or win_create                                       */
   int           explicit_nb_progress;   /* Poke the MPI progress engine at the end of nonblocking (NB) calls    */
   int           use_alloc_shm;          /* Pass alloc_shm info to win_allocate / alloc_mem                      */
@@ -178,7 +179,7 @@ int ARMCII_Iov_op_datatype(enum ARMCII_Op_e op, void **src, void **dst, int coun
 
 armcii_iov_iter_t *ARMCII_Strided_to_iov_iter(
                void *src_ptr, int src_stride_ar[/*stride_levels*/],
-               void *dst_ptr, int dst_stride_ar[/*stride_levels*/], 
+               void *dst_ptr, int dst_stride_ar[/*stride_levels*/],
                int count[/*stride_levels+1*/], int stride_levels);
 void ARMCII_Iov_iter_free(armcii_iov_iter_t *it);
 int  ARMCII_Iov_iter_has_next(armcii_iov_iter_t *it);

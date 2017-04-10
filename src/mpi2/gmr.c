@@ -2,12 +2,12 @@
  * Copyright (C) 2010. See COPYRIGHT in top-level directory.
  */
 
+#include <armciconf.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <mpi.h>
-
-#include <pthread.h>
 
 #include <armci.h>
 #include <armcix.h>
@@ -19,7 +19,6 @@
   */
 gmr_t *gmr_list = NULL;
 
-static pthread_mutex_t gmr_list_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 /** Create a distributed shared memory region. Collective on ARMCI group.
   *
@@ -60,52 +59,25 @@ gmr_t *gmr_create(gmr_size_t local_size, void **base_ptrs, ARMCI_Group *group) {
                                     duplicated the group (communicator). */
 
   mreg->nslices        = world_nproc;
+  mreg->access_mode    = ARMCIX_MODE_ALL;
+  mreg->lock_state     = GMR_LOCK_UNLOCKED;
+  mreg->dla_lock_count = 0;
   mreg->prev           = NULL;
   mreg->next           = NULL;
 
   /* Allocate my slice of the GMR */
   alloc_slices[alloc_me].size = local_size;
 
-  MPI_Info alloc_shm_info = MPI_INFO_NULL;
-  if (ARMCII_GLOBAL_STATE.use_alloc_shm) {
-      MPI_Info_create(&alloc_shm_info);
-      MPI_Info_set(alloc_shm_info, "alloc_shm", "true");
-  } else /* no alloc_shm */ {
-      alloc_shm_info = MPI_INFO_NULL;
-  }
-
-  if (ARMCII_GLOBAL_STATE.use_win_allocate) {
-
-      /* give hint to CASPER to avoid extra work for lock permission */
-      if (alloc_shm_info == MPI_INFO_NULL)
-          MPI_Info_create(&alloc_shm_info);
-      MPI_Info_set(alloc_shm_info, "epochs_used", "lockall");
-
-      MPI_Win_allocate( (MPI_Aint) local_size, 1, alloc_shm_info, group->comm, &(alloc_slices[alloc_me].base), &mreg->window);
-
-      if (local_size == 0) {
-        /* TODO: Is this necessary?  Is it a good idea anymore? */
-        alloc_slices[alloc_me].base = NULL;
-      } else {
-        ARMCII_Assert(alloc_slices[alloc_me].base != NULL);
-      }
-  } else /* use win create */ {
-      if (local_size == 0) {
-        alloc_slices[alloc_me].base = NULL;
-      } else {
-        MPI_Alloc_mem(local_size, alloc_shm_info, &(alloc_slices[alloc_me].base));
-        ARMCII_Assert(alloc_slices[alloc_me].base != NULL);
-      }
-      MPI_Win_create(alloc_slices[alloc_me].base, (MPI_Aint) local_size, 1, MPI_INFO_NULL, group->comm, &mreg->window);
-
-  } /* win allocate/create */
-
-  if (alloc_shm_info != MPI_INFO_NULL) {
-      MPI_Info_free(&alloc_shm_info);
+  if (local_size == 0) {
+    alloc_slices[alloc_me].base = NULL;
+  } else {
+    MPI_Alloc_mem(local_size, MPI_INFO_NULL, &(alloc_slices[alloc_me].base));
+    ARMCII_Assert(alloc_slices[alloc_me].base != NULL);
   }
 
   /* Debugging: Zero out shared memory if enabled */
   if (ARMCII_GLOBAL_STATE.debug_alloc && local_size > 0) {
+    ARMCII_Assert(alloc_slices[alloc_me].base != NULL);
     ARMCII_Bzero(alloc_slices[alloc_me].base, local_size);
   }
 
@@ -123,7 +95,6 @@ gmr_t *gmr_create(gmr_size_t local_size, void **base_ptrs, ARMCI_Group *group) {
   if (aggregate_size == 0) {
     free(alloc_slices);
     free(mreg->slices);
-    MPI_Win_free(&mreg->window);
     free(mreg);
 
     for (i = 0; i < alloc_nproc; i++)
@@ -131,6 +102,8 @@ gmr_t *gmr_create(gmr_size_t local_size, void **base_ptrs, ARMCI_Group *group) {
 
     return NULL;
   }
+
+  MPI_Win_create(alloc_slices[alloc_me].base, (MPI_Aint) local_size, 1, MPI_INFO_NULL, group->comm, &mreg->window);
 
   /* Populate the base pointers array */
   for (i = 0; i < alloc_nproc; i++)
@@ -153,49 +126,8 @@ gmr_t *gmr_create(gmr_size_t local_size, void **base_ptrs, ARMCI_Group *group) {
   MPI_Group_free(&world_group);
   MPI_Group_free(&alloc_group);
 
-  MPI_Win_lock_all((ARMCII_GLOBAL_STATE.rma_nocheck) ? MPI_MODE_NOCHECK : 0,
-                   mreg->window);
-
-  {
-    int unified;
-    void    *attr_ptr;
-    int     *attr_val;
-    int      attr_flag;
-    /* this function will always return flag=false in MPI-2 */
-    MPI_Win_get_attr(mreg->window, MPI_WIN_MODEL, &attr_ptr, &attr_flag);
-    if (attr_flag) {
-      attr_val = (int*)attr_ptr;
-      if (world_me==0) {
-        if ( (*attr_val)==MPI_WIN_SEPARATE ) {
-          printf("MPI_WIN_MODEL = MPI_WIN_SEPARATE \n" );
-          unified = 0;
-        } else if ( (*attr_val)==MPI_WIN_UNIFIED ) {
-#ifdef DEBUG
-          printf("MPI_WIN_MODEL = MPI_WIN_UNIFIED \n" );
-#endif
-          unified = 1;
-        } else {
-          printf("MPI_WIN_MODEL = %d (not UNIFIED or SEPARATE) \n", *attr_val );
-          unified = 0;
-        }
-      }
-    } else {
-      if (world_me==0) {
-        printf("MPI_WIN_MODEL attribute missing \n");
-        unified = 0;
-      }
-    }
-    if (!unified && (ARMCII_GLOBAL_STATE.shr_buf_method == ARMCII_SHR_BUF_NOGUARD) ) {
-      if (world_me==0) {
-        printf("Please re-run with ARMCI_SHR_BUF_METHOD=COPY\n");
-      }
-      /* ARMCI_Error("MPI_WIN_SEPARATE with NOGUARD", 1); */
-    }
-  }
-
-  int ptrc;
-  ptrc = pthread_mutex_lock(&gmr_list_mutex);
-  ARMCII_Assert(ptrc == 0);
+  /* Create the RMW mutex: Keeps RMW operations atomic wrt each other */
+  mreg->rmw_mutex = ARMCIX_Create_mutexes_hdl(1, group);
 
   /* Append the new region onto the region list */
   if (gmr_list == NULL) {
@@ -210,9 +142,6 @@ gmr_t *gmr_create(gmr_size_t local_size, void **base_ptrs, ARMCI_Group *group) {
     parent->next = mreg;
     mreg->prev   = parent;
   }
-
-  ptrc = pthread_mutex_unlock(&gmr_list_mutex);
-  ARMCII_Assert(ptrc == 0);
 
   return mreg;
 }
@@ -267,9 +196,16 @@ void gmr_destroy(gmr_t *mreg, ARMCI_Group *group) {
   /* If it's still not found, the user may have passed the wrong group */
   ARMCII_Assert_msg(mreg != NULL, "Could not locate the desired allocation");
 
-  int ptrc;
-  ptrc = pthread_mutex_lock(&gmr_list_mutex);
-  ARMCII_Assert(ptrc == 0);
+  switch (mreg->lock_state) {
+    case GMR_LOCK_UNLOCKED:
+      break;
+    case GMR_LOCK_DLA:
+      ARMCII_Warning("Releasing direct local access before freeing shared allocation\n");
+      gmr_dla_unlock(mreg);
+      break;
+    default:
+      ARMCII_Error("Unable to free locked memory region (%d)\n", mreg->lock_state);
+  }
 
   /* Remove from the list of mem regions */
   if (mreg->prev == NULL) {
@@ -285,22 +221,19 @@ void gmr_destroy(gmr_t *mreg, ARMCI_Group *group) {
       mreg->next->prev = mreg->prev;
   }
 
-  ptrc = pthread_mutex_unlock(&gmr_list_mutex);
-  ARMCII_Assert(ptrc == 0);
-
   ARMCII_Assert_msg(mreg->window != MPI_WIN_NULL, "A non-null mreg contains a null window.");
-  MPI_Win_unlock_all(mreg->window);
 
   /* Destroy the window and free all buffers */
   MPI_Win_free(&mreg->window);
 
-  if (!ARMCII_GLOBAL_STATE.use_win_allocate) {
-    if (mreg->slices[world_me].base != NULL) {
-      MPI_Free_mem(mreg->slices[world_me].base);
-    }
+
+  if (mreg->slices[world_me].base != NULL) {
+    MPI_Free_mem(mreg->slices[world_me].base);
   }
 
   free(mreg->slices);
+  ARMCIX_Destroy_mutexes_hdl(mreg->rmw_mutex);
+
   free(mreg);
 }
 
@@ -397,16 +330,11 @@ int gmr_put_typed(gmr_t *mreg, void *src, int src_count, MPI_Datatype src_type,
 
   // Perform checks
   MPI_Type_get_true_extent(dst_type, &lb, &extent);
+  ARMCII_Assert(mreg->lock_state != GMR_LOCK_UNLOCKED);
   ARMCII_Assert_msg(disp >= 0 && disp < mreg->slices[proc].size, "Invalid remote address");
   ARMCII_Assert_msg(disp + dst_count*extent <= mreg->slices[proc].size, "Transfer is out of range");
 
-  if (ARMCII_GLOBAL_STATE.rma_atomicity) {
-      MPI_Accumulate(src, src_count, src_type, grp_proc,
-                     (MPI_Aint) disp, dst_count, dst_type, MPI_REPLACE, mreg->window);
-  } else {
-      MPI_Put(src, src_count, src_type, grp_proc,
-              (MPI_Aint) disp, dst_count, dst_type, mreg->window);
-  }
+  MPI_Put(src, src_count, src_type, grp_proc, (MPI_Aint) disp, dst_count, dst_type, mreg->window);
 
   return 0;
 }
@@ -459,16 +387,11 @@ int gmr_get_typed(gmr_t *mreg, void *src, int src_count, MPI_Datatype src_type,
 
   // Perform checks
   MPI_Type_get_true_extent(src_type, &lb, &extent);
+  ARMCII_Assert(mreg->lock_state != GMR_LOCK_UNLOCKED);
   ARMCII_Assert_msg(disp >= 0 && disp < mreg->slices[proc].size, "Invalid remote address");
   ARMCII_Assert_msg(disp + src_count*extent <= mreg->slices[proc].size, "Transfer is out of range");
 
-  if (ARMCII_GLOBAL_STATE.rma_atomicity) {
-      MPI_Get_accumulate(NULL, 0, MPI_BYTE, dst, dst_count, dst_type, grp_proc,
-                         (MPI_Aint) disp, src_count, src_type, MPI_NO_OP, mreg->window);
-  } else {
-      MPI_Get(dst, dst_count, dst_type, grp_proc,
-              (MPI_Aint) disp, src_count, src_type, mreg->window);
-  }
+  MPI_Get(dst, dst_count, dst_type, grp_proc, (MPI_Aint) disp, src_count, src_type, mreg->window);
 
   return 0;
 }
@@ -522,6 +445,7 @@ int gmr_accumulate_typed(gmr_t *mreg, void *src, int src_count, MPI_Datatype src
 
   // Perform checks
   MPI_Type_get_true_extent(dst_type, &lb, &extent);
+  ARMCII_Assert(mreg->lock_state != GMR_LOCK_UNLOCKED);
   ARMCII_Assert_msg(disp >= 0 && disp < mreg->slices[proc].size, "Invalid remote address");
   ARMCII_Assert_msg(disp + dst_count*extent <= mreg->slices[proc].size, "Transfer is out of range");
 
@@ -530,3 +454,142 @@ int gmr_accumulate_typed(gmr_t *mreg, void *src, int src_count, MPI_Datatype src
   return 0;
 }
 
+/** Lock a memory region so that one-sided operations can be performed.
+  *
+  * @param[in] mreg     Memory region
+  * @param[in] mode     Lock mode (exclusive, shared, etc...)
+  * @param[in] proc     Absolute process id of the target
+  * @return             0 on success, non-zero on failure
+  */
+void gmr_lock(gmr_t *mreg, int proc) {
+  int grp_proc = ARMCII_Translate_absolute_to_group(&mreg->group, proc);
+  int grp_me   = ARMCII_Translate_absolute_to_group(&mreg->group, ARMCI_GROUP_WORLD.rank);
+  int lock_assert, lock_mode;
+
+  ARMCII_Assert(grp_proc >= 0 && grp_me >= 0);
+  ARMCII_Assert(mreg->lock_state == GMR_LOCK_UNLOCKED || mreg->lock_state == GMR_LOCK_DLA);
+
+  /* Check for active DLA and suspend if needed */
+  if (mreg->lock_state == GMR_LOCK_DLA) {
+    ARMCII_Assert(grp_me == mreg->lock_target);
+    MPI_Win_unlock(mreg->lock_target, mreg->window);
+    mreg->lock_state = GMR_LOCK_DLA_SUSP;
+  }
+
+  if (   mreg->access_mode & ARMCIX_MODE_CONFLICT_FREE 
+      && mreg->access_mode & ARMCIX_MODE_NO_LOAD_STORE )
+  {
+    /* Only non-conflicting RMA accesses allowed.
+       Shared and exclusive locks. */
+    lock_assert = MPI_MODE_NOCHECK;
+    lock_mode   = MPI_LOCK_SHARED;
+  } else if (mreg->access_mode & ARMCIX_MODE_CONFLICT_FREE) {
+    /* Non-conflicting RMA and local accesses allowed.
+       Shared and exclusive locks. */
+    lock_assert = 0;
+    lock_mode   = MPI_LOCK_SHARED;
+  } else {
+    /* Conflicting RMA and local accesses allowed.
+       Exclusive locks. */
+    lock_assert = 0;
+    lock_mode   = MPI_LOCK_EXCLUSIVE;
+  }
+
+  MPI_Win_lock(lock_mode, grp_proc, lock_assert, mreg->window);
+
+  if (lock_mode == MPI_LOCK_EXCLUSIVE)
+    mreg->lock_state = GMR_LOCK_EXCLUSIVE;
+  else
+    mreg->lock_state = GMR_LOCK_SHARED;
+
+  mreg->lock_target = grp_proc;
+}
+
+
+/** Unlock a memory region.
+  *
+  * @param[in] mreg     Memory region
+  * @param[in] proc     Absolute process id of the target
+  * @return             0 on success, non-zero on failure
+  */
+void gmr_unlock(gmr_t *mreg, int proc) {
+  int grp_proc = ARMCII_Translate_absolute_to_group(&mreg->group, proc);
+  int grp_me   = ARMCII_Translate_absolute_to_group(&mreg->group, ARMCI_GROUP_WORLD.rank);
+
+  ARMCII_Assert(grp_proc >= 0 && grp_me >= 0);
+  ARMCII_Assert(mreg->lock_state == GMR_LOCK_EXCLUSIVE || mreg->lock_state == GMR_LOCK_SHARED);
+  ARMCII_Assert(mreg->lock_target == grp_proc);
+
+  /* Check if DLA is suspended and needs to be resumed */
+  if (mreg->dla_lock_count > 0) {
+
+    if (mreg->lock_state != GMR_LOCK_EXCLUSIVE || mreg->lock_target != grp_me) {
+      MPI_Win_unlock(grp_proc, mreg->window);
+      MPI_Win_lock(MPI_LOCK_EXCLUSIVE, grp_me, 0, mreg->window); // FIXME: NOCHECK here?
+    }
+
+    mreg->lock_state = GMR_LOCK_DLA;
+    mreg->lock_target= grp_me;
+  }
+  else {
+    MPI_Win_unlock(grp_proc, mreg->window);
+    mreg->lock_state = GMR_LOCK_UNLOCKED;
+  }
+}
+
+/** Lock a memory region so that load/store operations can be performed.
+  *
+  * @param[in] mreg     Memory region
+  * @param[in] mode     Lock mode (exclusive, shared, etc...)
+  * @return             0 on success, non-zero on failure
+  */
+void gmr_dla_lock(gmr_t *mreg) {
+  int grp_proc = ARMCII_Translate_absolute_to_group(&mreg->group, ARMCI_GROUP_WORLD.rank);
+
+  ARMCII_Assert(grp_proc >= 0);
+  ARMCII_Assert(mreg->lock_state == GMR_LOCK_UNLOCKED || mreg->lock_state == GMR_LOCK_DLA);
+  ARMCII_Assert_msg((mreg->access_mode & ARMCIX_MODE_NO_LOAD_STORE) == 0,
+      "Direct local access is not allowed in the current access mode");
+
+  if (mreg->dla_lock_count == 0) {
+    ARMCII_Assert(mreg->lock_state == GMR_LOCK_UNLOCKED);
+
+    MPI_Win_lock(MPI_LOCK_EXCLUSIVE, grp_proc, 0, mreg->window);
+
+    mreg->lock_state = GMR_LOCK_DLA;
+    mreg->lock_target= grp_proc;
+  }
+
+  ARMCII_Assert(mreg->lock_state == GMR_LOCK_DLA);
+  mreg->dla_lock_count++;
+}
+
+
+/** Unlock a memory region that was locked for direct local access.
+  *
+  * @param[in] mreg     Memory region
+  */
+void gmr_dla_unlock(gmr_t *mreg) {
+  int grp_proc = ARMCII_Translate_absolute_to_group(&mreg->group, ARMCI_GROUP_WORLD.rank);
+
+  ARMCII_Assert(grp_proc >= 0);
+  ARMCII_Assert(mreg->lock_state == GMR_LOCK_DLA);
+  ARMCII_Assert_msg((mreg->access_mode & ARMCIX_MODE_NO_LOAD_STORE) == 0,
+      "Direct local access is not allowed in the current access mode");
+
+  mreg->dla_lock_count--;
+
+  if (mreg->dla_lock_count == 0) {
+    MPI_Win_unlock(grp_proc, mreg->window);
+    mreg->lock_state = GMR_LOCK_UNLOCKED;
+  }
+}
+
+void gmr_progress(void)
+{
+    if (ARMCII_GLOBAL_STATE.explicit_nb_progress) {
+        int flag;
+        MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, ARMCI_GROUP_WORLD.comm, &flag, MPI_STATUS_IGNORE);
+    }
+    return;
+}

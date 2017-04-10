@@ -12,30 +12,41 @@ lib_LTLIBRARIES = libarmci.la
 # Needed to connect with the GA build system
 noinst_LTLIBRARIES = libarmcii.la
 
-libarmci_la_SOURCES = src/buffer.c        \
-                      src/debug.c         \
-                      src/groups.c        \
-                      src/internals.c     \
-                      src/malloc.c        \
-                      src/gmr.c           \
-                      src/gmr-extras.c    \
-                      src/message.c       \
-                      src/message_gop.c   \
-                      src/mutex.c         \
-                      src/mutex_hdl_queue.c \
-                      src/onesided.c      \
-                      src/onesided_nb.c   \
-                      src/rmw.c           \
-                      src/strided.c       \
-                      src/strided_nb.c    \
-                      src/topology.c      \
-                      src/util.c          \
-                      src/value_ops.c     \
-                      src/vector.c        \
-                      src/vector_nb.c     \
-                      src/init_finalize.c \
-                      src/conflict_tree.c \
-                      src/parmci.c
+libarmci_la_SOURCES = src/common/conflict_tree.c   \
+                      src/common/debug.c           \
+                      src/common/groups.c          \
+                      src/common/init_finalize.c   \
+                      src/common/internals.c       \
+                      src/common/malloc.c          \
+                      src/common/message.c         \
+                      src/common/message_gop.c     \
+                      src/common/mutex.c           \
+                      src/common/mutex_hdl_queue.c \
+                      src/common/parmci.c          \
+                      src/common/strided_nb.c      \
+                      src/common/topology.c        \
+                      src/common/util.c            \
+                      src/common/value_ops.c       \
+                      src/common/vector_nb.c
+
+if USE_MPI2
+libarmci_la_SOURCES += src/mpi2/buffer.c        \
+                       src/mpi2/gmr.c           \
+                       src/mpi2/onesided.c      \
+                       src/mpi2/onesided_nb.c   \
+                       src/mpi2/rmw.c           \
+                       src/mpi2/strided.c       \
+                       src/mpi2/vector.c
+else
+libarmci_la_SOURCES += src/mpi3/buffer.c        \
+                       src/mpi3/gmr.c           \
+                       src/mpi3/gmr-extras.c    \
+                       src/mpi3/onesided.c      \
+                       src/mpi3/onesided_nb.c   \
+                       src/mpi3/rmw.c           \
+                       src/mpi3/strided.c       \
+                       src/mpi3/vector.c
+endif
 
 libarmci_la_LDFLAGS = -version-info $(libarmci_abi_version)
 

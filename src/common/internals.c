@@ -2,6 +2,8 @@
  * Copyright (C) 2010. See COPYRIGHT in top-level directory.
  */
 
+#include <armciconf.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <mpi.h>
@@ -125,3 +127,20 @@ void ARMCII_Acc_type_translate(int armci_datatype, MPI_Datatype *mpi_type, int *
     MPI_Type_size(*mpi_type, type_size);
 }
 
+
+/** Synchronize all public and private windows.
+  */
+void ARMCII_Sync_local(void) {
+  gmr_t *cur_mreg = gmr_list;
+
+  while (cur_mreg) {
+#ifdef USE_MPI2
+    gmr_dla_lock(cur_mreg);
+    gmr_dla_unlock(cur_mreg);
+#else
+    gmr_sync(cur_mreg);
+#endif
+
+    cur_mreg = cur_mreg->next;
+  }
+}

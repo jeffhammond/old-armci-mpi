@@ -353,6 +353,10 @@ int ARMCII_Iov_op_datatype(enum ARMCII_Op_e op, void **src, void **dst, int coun
     MPI_Type_commit(&type_rem);
 
     switch(op) {
+      case ARMCII_OP_ACC:
+        gmr_accumulate_typed(mreg, MPI_BOTTOM, 1, type_loc, MPI_BOTTOM, 1, type_rem, proc);
+        flush_local = 1;
+        break;
       case ARMCII_OP_PUT:
         gmr_put_typed(mreg, MPI_BOTTOM, 1, type_loc, MPI_BOTTOM, 1, type_rem, proc);
         flush_local = 1;
@@ -360,10 +364,6 @@ int ARMCII_Iov_op_datatype(enum ARMCII_Op_e op, void **src, void **dst, int coun
       case ARMCII_OP_GET:
         gmr_get_typed(mreg, MPI_BOTTOM, 1, type_rem, MPI_BOTTOM, 1, type_loc, proc);
         flush_local = 0;
-        break;
-      case ARMCII_OP_ACC:
-        gmr_accumulate_typed(mreg, MPI_BOTTOM, 1, type_loc, MPI_BOTTOM, 1, type_rem, proc);
-        flush_local = 1;
         break;
       default:
         ARMCII_Error("unknown operation (%d)", op);

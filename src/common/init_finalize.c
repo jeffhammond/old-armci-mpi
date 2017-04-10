@@ -2,6 +2,8 @@
  * Copyright (C) 2010. See COPYRIGHT in top-level directory.
  */
 
+#include <armciconf.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -149,13 +151,7 @@ int PARMCI_Init_thread(int armci_requested) {
   /* Check for debugging flags */
 
   ARMCII_GLOBAL_STATE.debug_alloc          = ARMCII_Getenv_bool("ARMCI_DEBUG_ALLOC", 0);
-  {
-    int junk;
-    junk = ARMCII_Getenv_bool("ARMCI_FLUSH_BARRIERS", -1);
-    if (junk != -1) {
-      ARMCII_Warning("ARMCI_FLUSH_BARRIERS is deprecated.\n");
-    }
-  }
+  ARMCII_GLOBAL_STATE.debug_flush_barriers = ARMCII_Getenv_bool("ARMCI_FLUSH_BARRIERS", 0);
   ARMCII_GLOBAL_STATE.verbose              = ARMCII_Getenv_bool("ARMCI_VERBOSE", 0);
 
   /* Group formation options */
@@ -237,8 +233,7 @@ int PARMCI_Init_thread(int armci_requested) {
 
   /* Use win_allocate or not, to work around MPI-3 RMA implementation bugs (now fixed) in MPICH. */
 
-  int win_alloc_default = 1;
-  ARMCII_GLOBAL_STATE.use_win_allocate=ARMCII_Getenv_bool("ARMCI_USE_WIN_ALLOCATE", win_alloc_default);
+  ARMCII_GLOBAL_STATE.use_win_allocate=ARMCII_Getenv_bool("ARMCI_USE_WIN_ALLOCATE", 1);
 
   /* Poke the MPI progress engine at the end of nonblocking (NB) calls */
 
@@ -322,6 +317,7 @@ int PARMCI_Init_thread(int armci_requested) {
       printf("  NONCOLLECTIVE_GROUPS   = %s\n", ARMCII_GLOBAL_STATE.noncollective_groups   ? "TRUE" : "FALSE");
       printf("  CACHE_RANK_TRANSLATION = %s\n", ARMCII_GLOBAL_STATE.cache_rank_translation ? "TRUE" : "FALSE");
       printf("  DEBUG_ALLOC            = %s\n", ARMCII_GLOBAL_STATE.debug_alloc            ? "TRUE" : "FALSE");
+      printf("  FLUSH_BARRIERS         = %s\n", ARMCII_GLOBAL_STATE.debug_flush_barriers   ? "TRUE" : "FALSE");
       printf("\n");
       fflush(NULL);
     }
