@@ -20,7 +20,7 @@
   * @param[in]  old_type        Type of the data element described by count and stride_array
   * @param[out] new_type        New MPI type for the given strided access
   */
-static void ARMCII_Strided_to_dtype(int stride_array[/*stride_levels*/], int count[/*stride_levels+1*/],
+void ARMCII_Strided_to_dtype(int stride_array[/*stride_levels*/], int count[/*stride_levels+1*/],
                              int stride_levels, MPI_Datatype old_type, MPI_Datatype *new_type)
 {
   int sizes   [stride_levels+1];
@@ -31,21 +31,25 @@ static void ARMCII_Strided_to_dtype(int stride_array[/*stride_levels*/], int cou
   MPI_Type_size(old_type, &old_type_size);
 
   /* Eliminate counts that don't count (all 1 counts at the end) */
-  for (i = stride_levels+1; i > 0 && stride_levels > 0 && count[i-1] == 1; i--)
+  for (i = stride_levels+1; (i > 0) && (stride_levels > 0) && (count[i-1] == 1); i--)
     stride_levels--;
 
   /* A correct strided spec should me monotonic increasing and stride_array[i+1] should
      be a multiple of stride_array[i]. */
   if (stride_levels > 0) {
-    for (i = 1; i < stride_levels; i++)
-      ARMCII_Assert(stride_array[i] >= stride_array[i-1] && stride_array[i] % stride_array[i-1] == 0);
+    for (i = 1; i < stride_levels; i++) {
+      ARMCII_Assert(stride_array[i] >= stride_array[i-1]);
+      /* This assertion is violated by what seems to be valid usage resulting from
+       * the new GA API call nga_strided_get during the stride test in GA 5.2.
+       * ARMCII_Assert((stride_array[i] % stride_array[i-1]) == 0); */
+    }
   }
 
   /* Test for a contiguous transfer */
   if (stride_levels == 0) {
     int elem_count = count[0]/old_type_size;
 
-    ARMCII_Assert(count[0] % old_type_size == 0);
+    ARMCII_Assert((count[0] % old_type_size) == 0);
     MPI_Type_contiguous(elem_count, old_type, new_type);
   }
 
@@ -58,14 +62,17 @@ static void ARMCII_Strided_to_dtype(int stride_array[/*stride_levels*/], int cou
     sizes   [stride_levels] = stride_array[0]/old_type_size;
     subsizes[stride_levels] = count[0]/old_type_size;
 
-    ARMCII_Assert(stride_array[0] % old_type_size == 0 && count[0] % old_type_size == 0);
+    ARMCII_Assert((stride_array[0] % old_type_size) == 0);
+    ARMCII_Assert((count[0] % old_type_size) == 0);
 
     for (i = 1; i < stride_levels; i++) {
       /* Convert strides into dimensions by dividing out contributions from lower dims */
       sizes   [stride_levels-i] = stride_array[i]/stride_array[i-1];
       subsizes[stride_levels-i] = count[i];
 
-      ARMCII_Assert_msg(stride_array[i] % stride_array[i-1] == 0, "Invalid striding");
+      /* This assertion is violated by what seems to be valid usage resulting from
+       * the new GA API call nga_strided_get during the stride test in GA 5.2.  
+       * ARMCII_Assert_msg((stride_array[i] % stride_array[i-1]) == 0, "Invalid striding"); */
     }
 
     sizes   [0] = count[stride_levels];
@@ -134,7 +141,7 @@ int PARMCI_PutS(void *src_ptr, int src_stride_ar[/*stride_levels*/],
 
     /* NOGUARD: If src_buf hasn't been assigned to a copy, the strided source
      * buffer is going to be used directly. */
-    if (src_buf == NULL) { 
+    if (src_buf == NULL) {
         src_buf = src_ptr;
         ARMCII_Strided_to_dtype(src_stride_ar, count, stride_levels, MPI_BYTE, &src_type);
     }
@@ -155,8 +162,9 @@ int PARMCI_PutS(void *src_ptr, int src_stride_ar[/*stride_levels*/],
     MPI_Type_free(&dst_type);
 
     /* COPY: Free temporary buffer */
-    if (src_buf != src_ptr)
+    if (src_buf != src_ptr) {
       MPI_Free_mem(src_buf);
+    }
 
     err = 0;
 
@@ -199,7 +207,7 @@ int PARMCI_PutS(void *src_ptr, int src_stride_ar[/*stride_levels*/],
   * @return                    Zero on success, error code otherwise.
   */
 int PARMCI_GetS(void *src_ptr, int src_stride_ar[/*stride_levels*/],
-               void *dst_ptr, int dst_stride_ar[/*stride_levels*/], 
+               void *dst_ptr, int dst_stride_ar[/*stride_levels*/],
                int count[/*stride_levels+1*/], int stride_levels, int proc) {
 
   int err;
@@ -228,7 +236,7 @@ int PARMCI_GetS(void *src_ptr, int src_stride_ar[/*stride_levels*/],
 
     /* NOGUARD: If dst_buf hasn't been assigned to a copy, the strided source
      * buffer is going to be used directly. */
-    if (dst_buf == NULL) { 
+    if (dst_buf == NULL) {
         dst_buf = dst_ptr;
         ARMCII_Strided_to_dtype(dst_stride_ar, count, stride_levels, MPI_BYTE, &dst_type);
     }
@@ -368,7 +376,7 @@ int PARMCI_AccS(int datatype, void *scale,
 
     /* NOGUARD: If src_buf hasn't been assigned to a copy, the strided source
      * buffer is going to be used directly. */
-    if (src_buf == NULL) { 
+    if (src_buf == NULL) {
         src_buf = src_ptr;
         ARMCII_Strided_to_dtype(src_stride_ar, count, stride_levels, mpi_datatype, &src_type);
     }
@@ -394,8 +402,9 @@ int PARMCI_AccS(int datatype, void *scale,
     MPI_Type_free(&dst_type);
 
     /* COPY/SCALE: Free temp buffer */
-    if (src_buf != src_ptr)
+    if (src_buf != src_ptr) {
       MPI_Free_mem(src_buf);
+    }
 
     err = 0;
 
@@ -411,106 +420,6 @@ int PARMCI_AccS(int datatype, void *scale,
 
   return err;
 }
-
-
-/* -- begin weak symbols block -- */
-#if defined(HAVE_PRAGMA_WEAK)
-#  pragma weak ARMCI_NbPutS = PARMCI_NbPutS
-#elif defined(HAVE_PRAGMA_HP_SEC_DEF)
-#  pragma _HP_SECONDARY_DEF PARMCI_NbPutS ARMCI_NbPutS
-#elif defined(HAVE_PRAGMA_CRI_DUP)
-#  pragma _CRI duplicate ARMCI_NbPutS as PARMCI_NbPutS
-#endif
-/* -- end weak symbols block -- */
-
-/** Non-blocking operation that transfers data from the calling process to the
-  * memory of the remote process.  The data transfer is strided and blocking.
-  *
-  * @param[in] src_ptr         Source starting address of the data block to put.
-  * @param[in] src_stride_arr  Source array of stride distances in bytes.
-  * @param[in] dst_ptr         Destination starting address to put data.
-  * @param[in] dst_stride_ar   Destination array of stride distances in bytes.
-  * @param[in] count           Block size in each dimension. count[0] should be the
-  *                            number of bytes of contiguous data in leading dimension.
-  * @param[in] stride_levels   The level of strides.
-  * @param[in] proc            Remote process ID (destination).
-  *
-  * @return                    Zero on success, error code otherwise.
-  */
-int PARMCI_NbPutS(void *src_ptr, int src_stride_ar[/*stride_levels*/],
-               void *dst_ptr, int dst_stride_ar[/*stride_levels*/], 
-               int count[/*stride_levels+1*/], int stride_levels, int proc, armci_hdl_t *hdl) {
-
-  return PARMCI_PutS(src_ptr, src_stride_ar, dst_ptr, dst_stride_ar, count, stride_levels, proc);
-}
-
-
-/* -- begin weak symbols block -- */
-#if defined(HAVE_PRAGMA_WEAK)
-#  pragma weak ARMCI_NbGetS = PARMCI_NbGetS
-#elif defined(HAVE_PRAGMA_HP_SEC_DEF)
-#  pragma _HP_SECONDARY_DEF PARMCI_NbGetS ARMCI_NbGetS
-#elif defined(HAVE_PRAGMA_CRI_DUP)
-#  pragma _CRI duplicate ARMCI_NbGetS as PARMCI_NbGetS
-#endif
-/* -- end weak symbols block -- */
-
-/** Non-blocking operation that transfers data from the remote process to the
-  * memory of the calling process.  The data transfer is strided and blocking.
-  *
-  * @param[in] src_ptr         Source starting address of the data block to put.
-  * @param[in] src_stride_arr  Source array of stride distances in bytes.
-  * @param[in] dst_ptr         Destination starting address to put data.
-  * @param[in] dst_stride_ar   Destination array of stride distances in bytes.
-  * @param[in] count           Block size in each dimension. count[0] should be the
-  *                            number of bytes of contiguous data in leading dimension.
-  * @param[in] stride_levels   The level of strides.
-  * @param[in] proc            Remote process ID (destination).
-  *
-  * @return                    Zero on success, error code otherwise.
-  */
-int PARMCI_NbGetS(void *src_ptr, int src_stride_ar[/*stride_levels*/],
-               void *dst_ptr, int dst_stride_ar[/*stride_levels*/], 
-               int count[/*stride_levels+1*/], int stride_levels, int proc, armci_hdl_t *hdl) {
-
-  return PARMCI_GetS(src_ptr, src_stride_ar, dst_ptr, dst_stride_ar, count, stride_levels, proc);
-}
-
-
-/* -- begin weak symbols block -- */
-#if defined(HAVE_PRAGMA_WEAK)
-#  pragma weak ARMCI_NbAccS = PARMCI_NbAccS
-#elif defined(HAVE_PRAGMA_HP_SEC_DEF)
-#  pragma _HP_SECONDARY_DEF PARMCI_NbAccS ARMCI_NbAccS
-#elif defined(HAVE_PRAGMA_CRI_DUP)
-#  pragma _CRI duplicate ARMCI_NbAccS as PARMCI_NbAccS
-#endif
-/* -- end weak symbols block -- */
-
-/** Non-blocking operation that accumulates data from the local process into the
-  * memory of the remote process.  The data transfer is strided and blocking.
-  *
-  * @param[in] datatype        Type of data to be transferred.
-  * @param[in] scale           Pointer to the value that input data should be scaled by.
-  * @param[in] src_ptr         Source starting address of the data block to put.
-  * @param[in] src_stride_arr  Source array of stride distances in bytes.
-  * @param[in] dst_ptr         Destination starting address to put data.
-  * @param[in] dst_stride_ar   Destination array of stride distances in bytes.
-  * @param[in] count           Block size in each dimension. count[0] should be the
-  *                            number of bytes of contiguous data in leading dimension.
-  * @param[in] stride_levels   The level of strides.
-  * @param[in] proc            Remote process ID (destination).
-  *
-  * @return                    Zero on success, error code otherwise.
-  */
-int PARMCI_NbAccS(int datatype, void *scale,
-               void *src_ptr, int src_stride_ar[/*stride_levels*/],
-               void *dst_ptr, int dst_stride_ar[/*stride_levels*/],
-               int count[/*stride_levels+1*/], int stride_levels, int proc, armci_hdl_t *hdl) {
-
-  return PARMCI_AccS(datatype, scale, src_ptr, src_stride_ar, dst_ptr, dst_stride_ar, count, stride_levels, proc);
-}
-
 
 /** Translate a strided operation into a more general IO Vector.
   *
@@ -540,7 +449,7 @@ void ARMCII_Strided_to_iov(armci_giov_t *iov,
   iov->src_ptr_array = malloc(iov->ptr_array_len*sizeof(void*));
   iov->dst_ptr_array = malloc(iov->ptr_array_len*sizeof(void*));
 
-  ARMCII_Assert(iov->src_ptr_array != NULL && iov->dst_ptr_array != NULL);
+  ARMCII_Assert((iov->src_ptr_array != NULL) && (iov->dst_ptr_array != NULL));
 
   // Case 1: Non-strided transfer
   if (stride_levels == 0) {
@@ -652,7 +561,7 @@ void ARMCII_Iov_iter_free(armcii_iov_iter_t *it) {
   * @return             True if another iteration exists
   */
 int ARMCII_Iov_iter_has_next(armcii_iov_iter_t *it) {
-  return (it->idx[it->stride_levels-1] < it->count[it->stride_levels] && !it->was_contiguous);
+  return ((it->idx[it->stride_levels-1] < it->count[it->stride_levels]) && (!it->was_contiguous));
 }
 
 
@@ -741,6 +650,8 @@ int PARMCI_PutS_flag(void *src_ptr, int src_stride_ar[/*stride_levels*/],
                  int count[/*stride_levels+1*/], int stride_levels, 
                  int *flag, int value, int proc) {
 
+  /* TODO: This can be optimized with a more direct implementation, especially in the
+   *       case where RMA is ordered; in that case, the Fence (Flush) is not necessary. */
   PARMCI_PutS(src_ptr, src_stride_ar, dst_ptr, dst_stride_ar, count, stride_levels, proc);
   PARMCI_Fence(proc);
   PARMCI_Put(&value, flag, sizeof(int), proc);

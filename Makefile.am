@@ -23,11 +23,9 @@ libarmci_la_SOURCES = src/common/conflict_tree.c   \
                       src/common/mutex.c           \
                       src/common/mutex_hdl_queue.c \
                       src/common/parmci.c          \
-                      src/common/strided_nb.c      \
                       src/common/topology.c        \
                       src/common/util.c            \
-                      src/common/value_ops.c       \
-                      src/common/vector_nb.c
+                      src/common/value_ops.c
 
 if USE_MPI2
 libarmci_la_SOURCES += src/mpi2/buffer.c        \
@@ -36,7 +34,9 @@ libarmci_la_SOURCES += src/mpi2/buffer.c        \
                        src/mpi2/onesided_nb.c   \
                        src/mpi2/rmw.c           \
                        src/mpi2/strided.c       \
-                       src/mpi2/vector.c
+                       src/mpi2/strided_nb.c    \
+                       src/mpi2/vector.c        \
+                       src/mpi2/vector_nb.c
 else
 libarmci_la_SOURCES += src/mpi3/buffer.c        \
                        src/mpi3/gmr.c           \
@@ -45,7 +45,9 @@ libarmci_la_SOURCES += src/mpi3/buffer.c        \
                        src/mpi3/onesided_nb.c   \
                        src/mpi3/rmw.c           \
                        src/mpi3/strided.c       \
-                       src/mpi3/vector.c
+                       src/mpi3/strided_nb.c    \
+                       src/mpi3/vector.c        \
+                       src/mpi3/vector_nb.c
 endif
 
 libarmci_la_LDFLAGS = -version-info $(libarmci_abi_version)

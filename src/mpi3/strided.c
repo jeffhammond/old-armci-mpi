@@ -146,7 +146,7 @@ int PARMCI_PutS(void *src_ptr, int src_stride_ar[/*stride_levels*/],
 
     /* NOGUARD: If src_buf hasn't been assigned to a copy, the strided source
      * buffer is going to be used directly. */
-    if (src_buf == NULL) { 
+    if (src_buf == NULL) {
         src_buf = src_ptr;
         ARMCII_Strided_to_dtype(src_stride_ar, count, stride_levels, MPI_BYTE, &src_type);
     }
@@ -211,7 +211,7 @@ int PARMCI_PutS(void *src_ptr, int src_stride_ar[/*stride_levels*/],
   * @return                    Zero on success, error code otherwise.
   */
 int PARMCI_GetS(void *src_ptr, int src_stride_ar[/*stride_levels*/],
-               void *dst_ptr, int dst_stride_ar[/*stride_levels*/], 
+               void *dst_ptr, int dst_stride_ar[/*stride_levels*/],
                int count[/*stride_levels+1*/], int stride_levels, int proc) {
 
   int err;
@@ -247,7 +247,7 @@ int PARMCI_GetS(void *src_ptr, int src_stride_ar[/*stride_levels*/],
 
     /* NOGUARD: If dst_buf hasn't been assigned to a copy, the strided source
      * buffer is going to be used directly. */
-    if (dst_buf == NULL) { 
+    if (dst_buf == NULL) {
         dst_buf = dst_ptr;
         ARMCII_Strided_to_dtype(dst_stride_ar, count, stride_levels, MPI_BYTE, &dst_type);
     }
@@ -385,7 +385,7 @@ int PARMCI_AccS(int datatype, void *scale,
 
     /* NOGUARD: If src_buf hasn't been assigned to a copy, the strided source
      * buffer is going to be used directly. */
-    if (src_buf == NULL) { 
+    if (src_buf == NULL) {
         src_buf = src_ptr;
         ARMCII_Strided_to_dtype(src_stride_ar, count, stride_levels, mpi_datatype, &src_type);
     }
