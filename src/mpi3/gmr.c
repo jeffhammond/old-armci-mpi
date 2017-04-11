@@ -670,3 +670,12 @@ void gmr_dla_unlock(gmr_t *mreg) {
   }
 #endif
 }
+
+void gmr_progress(void)
+{
+    if (ARMCII_GLOBAL_STATE.explicit_nb_progress) {
+        int flag;
+        MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, ARMCI_GROUP_WORLD.comm, &flag, MPI_STATUS_IGNORE);
+    }
+    return;
+}
