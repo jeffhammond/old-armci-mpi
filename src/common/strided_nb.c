@@ -336,12 +336,14 @@ int PARMCI_NbAccS(int datatype, void *scale,
     MPI_Type_commit(&src_type);
     MPI_Type_commit(&dst_type);
 
-    int src_size, dst_size;
+    {
+        int src_size, dst_size;
 
-    MPI_Type_size(src_type, &src_size);
-    MPI_Type_size(dst_type, &dst_size);
+        MPI_Type_size(src_type, &src_size);
+        MPI_Type_size(dst_type, &dst_size);
 
-    ARMCII_Assert(src_size == dst_size);
+        ARMCII_Assert(src_size == dst_size);
+    }
 
     mreg = gmr_lookup(dst_ptr, proc);
     ARMCII_Assert_msg(mreg != NULL, "Invalid shared pointer");

@@ -329,8 +329,9 @@ int PARMCI_Init_thread(int armci_requested) {
     /* Create the asynchronous progress thread */
     {
         if(ARMCII_GLOBAL_STATE.progress_thread) {
+            int rc;
             progress_active = 1;
-            int rc = pthread_create(&ARMCI_Progress_thread, NULL, &progress_function, &progress_active);
+            rc = pthread_create(&ARMCI_Progress_thread, NULL, &progress_function, &progress_active);
             if (rc) {
                 ARMCII_Warning("ARMCI progress thread creation failed (%d).\n", rc);
             }
@@ -439,8 +440,9 @@ int PARMCI_Finalize(void) {
     /* Destroy the asynchronous progress thread */
     {
         if(ARMCII_GLOBAL_STATE.progress_thread) {
+            int rc;
             progress_active = 0;
-            int rc = pthread_join(ARMCI_Progress_thread, NULL);
+            rc = pthread_join(ARMCI_Progress_thread, NULL);
             if (rc) {
                 ARMCII_Warning("ARMCI progress thread join failed (%d).\n", rc);
             }
