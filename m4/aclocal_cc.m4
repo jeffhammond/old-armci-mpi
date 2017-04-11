@@ -536,7 +536,7 @@ if test "$enable_strict_done" != "yes" ; then
 		;;
 	     all|yes)
 		enable_strict_done="yes"
-		enable_c89=yes
+		enable_c99=yes
 		enable_posix=yes
 		enable_opt=yes
 	        ;;
