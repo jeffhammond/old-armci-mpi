@@ -5,20 +5,24 @@
 check_PROGRAMS += \
                   tests/mpi/ping-pong-mpi               \
                   tests/mpi/test_mpi_accs               \
+                  tests/mpi/test_mpi_dim                \
                   tests/mpi/test_mpi_indexed_accs       \
                   tests/mpi/test_mpi_indexed_gets       \
                   tests/mpi/test_mpi_indexed_puts_gets  \
                   tests/mpi/test_mpi_subarray_accs      \
                   tests/mpi/test_win_create             \
+                  tests/mpi/test_win_model              \
                   # end
 
 TESTS          += \
                   tests/mpi/test_mpi_accs               \
+                  tests/mpi/test_mpi_dim                \
                   tests/mpi/test_mpi_indexed_accs       \
                   tests/mpi/test_mpi_indexed_gets       \
                   tests/mpi/test_mpi_indexed_puts_gets  \
                   tests/mpi/test_mpi_subarray_accs      \
                   tests/mpi/test_win_create             \
+                  tests/mpi/test_win_model              \
                   #tests/mpi/ping-pong-mpi      \
                   # end
 
@@ -29,3 +33,4 @@ tests_mpi_test_mpi_indexed_gets_LDADD = libarmci.la
 tests_mpi_test_mpi_indexed_puts_gets_LDADD = libarmci.la
 tests_mpi_test_mpi_subarray_accs_LDADD = libarmci.la
 tests_mpi_test_win_create_LDADD = libarmci.la
+tests_mpi_test_win_model_LDADD = libarmci.la

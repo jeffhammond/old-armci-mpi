@@ -4,7 +4,7 @@ dnl
 
 AC_PREREQ(2.62)
 
-AC_INIT([armci],[0])
+AC_INIT([armci],[0.1])
 AC_CONFIG_AUX_DIR(m4)
 AC_CONFIG_MACRO_DIR(m4)
 AM_INIT_AUTOMAKE([-Wall -Werror foreign 1.11 color-tests parallel-tests subdir-objects])
@@ -18,6 +18,7 @@ if test ! -z "$MPICC" ; then
 fi
 PAC_PUSH_FLAG(CFLAGS)
 AC_PROG_CC(mpicc)
+AM_PROG_CC_C_O
 
 # automake 1.12 seems to require this, but automake 1.11 doesn't recognize it
 # must come before LT_INIT
@@ -32,10 +33,11 @@ m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 ## Version checks
 if test -s "$srcdir/VERSION" ; then
     . $srcdir/VERSION
-    export ARMCI_VERSION
 else
     AC_MSG_ERROR([Version information not found. Configuration aborted.])
 fi
+ARMCI_VERSION=${PACKAGE_VERSION}
+export ARMCI_VERSION
 
 # ABI version
 AC_SUBST(libarmci_abi_version)
@@ -118,14 +120,19 @@ PAC_C_MACRO_VA_ARGS
 AC_C_CONST
 AC_C_RESTRICT
 
-## Chcek for C99
+## Check for C99
 AC_PROG_CC_C99
 if test "$ac_cv_prog_cc_c99" = "no" ; then
    AC_ERROR([C99 not supported by the compiler])
 fi
 
-AC_CHECK_HEADERS([execinfo.h stdint.h inttypes.h])
+AC_CHECK_HEADERS([execinfo.h stdint.h inttypes.h unistd.h time.h])
 AC_TYPE_UINT8_T
+AX_PTHREAD([AC_DEFINE(HAVE_PTHREADS,1,[Defined when Pthread library is detected])])
+CFLAGS="$CFLAGS $PTHREAD_CFLAGS"
+LIBS="$PTHREAD_LIBS $LIBS"
+AC_CHECK_FUNC([usleep], [AC_DEFINE([HAVE_USLEEP], [1], [Define if usleep exists.])])
+AC_CHECK_FUNC([nanosleep], [AC_DEFINE([HAVE_NANOSLEEP], [1], [Define if nanosleep exists.])])
 
 ## Debugging support
 AC_ARG_ENABLE(g, AC_HELP_STRING([--enable-g],[Enable Debugging]),

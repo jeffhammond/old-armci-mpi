@@ -38,7 +38,7 @@ void ARMCII_Error_impl(const char *file, const int line, const char *func, const
   disp += vsnprintf(string, 500, msg, ap);
   va_end(ap);
 
-  fprintf(stderr, "[%d] ARMCI Internal error in %s (%s:%d)\n[%d] Messge: %s\n", ARMCI_GROUP_WORLD.rank, 
+  fprintf(stderr, "[%d] ARMCI Internal error in %s (%s:%d)\n[%d] Message: %s\n", ARMCI_GROUP_WORLD.rank,
       func, file, line, ARMCI_GROUP_WORLD.rank, string);
   MPI_Abort(ARMCI_GROUP_WORLD.comm, 100);
 }
@@ -57,14 +57,19 @@ int ARMCII_Translate_absolute_to_group(ARMCI_Group *group, int world_rank) {
 
   ARMCII_Assert(world_rank >= 0 && world_rank < ARMCI_GROUP_WORLD.size);
 
+  if (!(0 <= world_rank && world_rank < ARMCI_GROUP_WORLD.size)) {
+      ARMCII_Warning("world_rank (%d) is not in the range [0,ARMCI_GROUP_WORLD.size=%d)!\n",
+                      world_rank, ARMCI_GROUP_WORLD.size);
+  }
+
   /* Check if group is the world group */
-  if (group->comm == ARMCI_GROUP_WORLD.comm)
+  if (group->comm == ARMCI_GROUP_WORLD.comm) {
     group_rank = world_rank;
-
+  }
   /* Check for translation cache */
-  else if (group->grp_to_abs != NULL)
+  else if (group->grp_to_abs != NULL) {
     group_rank = group->abs_to_grp[world_rank];
-
+  }
   else {
     /* Translate the rank */
     MPI_Comm_group(ARMCI_GROUP_WORLD.comm, &world_group);
@@ -120,16 +125,3 @@ void ARMCII_Acc_type_translate(int armci_datatype, MPI_Datatype *mpi_type, int *
     MPI_Type_size(*mpi_type, type_size);
 }
 
-
-/** Synchronize all public and private windows.
-  */
-void ARMCII_Flush_local(void) {
-  gmr_t *cur_mreg = gmr_list;
-
-  while (cur_mreg) {
-    gmr_dla_lock(cur_mreg);
-    gmr_dla_unlock(cur_mreg);
-
-    cur_mreg = cur_mreg->next;
-  }
-}

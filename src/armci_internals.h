@@ -14,6 +14,10 @@
 #  include <inttypes.h>
 #endif
 
+#ifdef HAVE_PTHREADS
+#  include <pthread.h>
+#endif
+
 /* Likely/Unlikely macros borrowed from MPICH:
  */
 
@@ -32,7 +36,7 @@
  * These macros are not namespaced because the namespacing is cumbersome.
  */
 /* safety guard for now, add a configure check in the future */
-#if defined(__GNUC__) && (__GNUC__ >= 3)
+#if ( defined(__GNUC__) && (__GNUC__ >= 3) ) || defined(__IBMC__) || defined(__INTEL_COMPILER) || defined(__clang__)
 #  define unlikely(x_) __builtin_expect(!!(x_),0)
 #  define likely(x_)   __builtin_expect(!!(x_),1)
 #else
@@ -69,12 +73,21 @@ extern char ARMCII_Shr_buf_methods_str[][10];
 typedef struct {
   int           init_count;             /* Number of times ARMCI_Init has been called                           */
   int           debug_alloc;            /* Do extra debuggin on memory allocation                               */
-  int           debug_flush_barriers;   /* Flush all windows on a barrier                                       */
   int           iov_checks;             /* Disable IOV same allocation and overlapping checks                   */
   int           iov_batched_limit;      /* Max number of ops per epoch for BATCHED IOV method                   */
   int           noncollective_groups;   /* Use noncollective group creation algorithm                           */
   int           cache_rank_translation; /* Enable caching of translation between absolute and group ranks       */
   int           verbose;                /* ARMCI should produce extra status output                             */
+#ifdef HAVE_PTHREADS
+  int           progress_thread;        /* Create progress thread                                               */
+  int           progress_usleep;        /* Argument to usleep() to throttling polling                           */
+#endif
+  int           use_win_allocate;       /* Use win_allocate or win_create                                       */
+  int           explicit_nb_progress;   /* Poke the MPI progress engine at the end of nonblocking (NB) calls    */
+  int           use_alloc_shm;          /* Pass alloc_shm info to win_allocate / alloc_mem                      */
+  int           rma_atomicity;          /* Use Accumulate and Get_accumulate for Put and Get                    */
+  int           end_to_end_flush;       /* All flush_local calls become flush                                   */
+  int           rma_nocheck;            /* Use MPI_MODE_NOCHECK on synchronization calls that take assertion    */
 
   enum ARMCII_Strided_methods_e strided_method; /* Strided transfer method              */
   enum ARMCII_Iov_methods_e     iov_method;     /* IOV transfer method                  */
@@ -86,24 +99,26 @@ typedef struct {
 
 extern ARMCI_Group    ARMCI_GROUP_WORLD;
 extern ARMCI_Group    ARMCI_GROUP_DEFAULT;
-extern MPI_Op         MPI_ABSMIN_OP;
-extern MPI_Op         MPI_ABSMAX_OP;
-extern MPI_Op         MPI_SELMIN_OP;
-extern MPI_Op         MPI_SELMAX_OP;
+extern MPI_Op         ARMCI_MPI_ABSMIN_OP;
+extern MPI_Op         ARMCI_MPI_ABSMAX_OP;
+extern MPI_Op         ARMCI_MPI_SELMIN_OP;
+extern MPI_Op         ARMCI_MPI_SELMAX_OP;
 extern global_state_t ARMCII_GLOBAL_STATE;
-  
+#ifdef HAVE_PTHREADS
+extern pthread_t      ARMCI_Progress_thread;
+#endif
 
 /* Utility functions */
 
 void  ARMCII_Bzero(void *buf, armci_size_t size);
 int   ARMCII_Log2(unsigned int val);
-char *ARMCII_Getenv(char *varname);
-int   ARMCII_Getenv_bool(char *varname, int default_value);
-int   ARMCII_Getenv_int(char *varname, int default_value);
+char *ARMCII_Getenv(const char *varname);
+int   ARMCII_Getenv_bool(const char *varname, int default_value);
+int   ARMCII_Getenv_int(const char *varname, int default_value);
 
 /* Synchronization */
 
-void ARMCII_Flush_local(void);
+void ARMCII_Sync_local(void);
 
 /* GOP Operators */
 
@@ -147,18 +162,19 @@ int  ARMCII_Iov_check_same_allocation(void **ptrs, int count, int proc);
 
 void ARMCII_Strided_to_iov(armci_giov_t *iov,
                void *src_ptr, int src_stride_ar[/*stride_levels*/],
-               void *dst_ptr, int dst_stride_ar[/*stride_levels*/], 
+               void *dst_ptr, int dst_stride_ar[/*stride_levels*/],
                int count[/*stride_levels+1*/], int stride_levels);
 
-int ARMCII_Iov_op_dispatch(enum ARMCII_Op_e op, void **src, void **dst, int count, int size,
-    int datatype, int overlapping, int same_alloc, int proc);
+void ARMCII_Strided_to_dtype(int stride_array[/*stride_levels*/], int count[/*stride_levels+1*/],
+                             int stride_levels, MPI_Datatype old_type, MPI_Datatype *new_type);
 
-int ARMCII_Iov_op_safe(enum ARMCII_Op_e op, void **src, void **dst, int count, int elem_count,
-    MPI_Datatype type, int proc);
+int ARMCII_Iov_op_dispatch(enum ARMCII_Op_e op, void **src, void **dst, int count, int size,
+    int datatype, int overlapping, int same_alloc, int proc, int blocking);
+
 int ARMCII_Iov_op_batched(enum ARMCII_Op_e op, void **src, void **dst, int count, int elem_count,
-    MPI_Datatype type, int proc);
+    MPI_Datatype type, int proc, int consrv /* if 1, batched = safe */, int blocking);
 int ARMCII_Iov_op_datatype(enum ARMCII_Op_e op, void **src, void **dst, int count, int elem_count,
-    MPI_Datatype type, int proc);
+    MPI_Datatype type, int proc, int blocking);
 
 armcii_iov_iter_t *ARMCII_Strided_to_iov_iter(
                void *src_ptr, int src_stride_ar[/*stride_levels*/],

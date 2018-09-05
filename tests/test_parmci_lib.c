@@ -14,7 +14,7 @@ int ARMCI_Finalize(void) {
 
 void ARMCI_Barrier(void) {
   parmci_calls++;
-  return PARMCI_Barrier();
+  PARMCI_Barrier();
 }
 
 int ARMCI_Get(void *src, void *dst, int size, int target) {

@@ -16,7 +16,7 @@
 /** Fatal error, print the message and abort the program with the provided
   * error code.
   */
-void ARMCI_Error(char *msg, int code) {
+void ARMCI_Error(const char *msg, int code) {
   fprintf(stderr, "[%d] ARMCI Error: %s\n", ARMCI_GROUP_WORLD.rank, msg);
   fflush(NULL);
   MPI_Abort(ARMCI_GROUP_WORLD.comm, code);
@@ -37,11 +37,14 @@ void ARMCI_Error(char *msg, int code) {
   * group!).
   */
 void PARMCI_Barrier(void) {
+  gmr_t *cur_mreg = gmr_list;
+
   PARMCI_AllFence();
   MPI_Barrier(ARMCI_GROUP_WORLD.comm);
 
-  if (ARMCII_GLOBAL_STATE.debug_flush_barriers) {
-    ARMCII_Flush_local();
+  while (cur_mreg) {
+    gmr_sync(cur_mreg);
+    cur_mreg = cur_mreg->next;
   }
 }
 
@@ -62,6 +65,12 @@ void PARMCI_Barrier(void) {
   * @param[in] proc Process to target
   */
 void PARMCI_Fence(int proc) {
+  gmr_t *cur_mreg = gmr_list;
+
+  while (cur_mreg) {
+    gmr_flush(cur_mreg, proc, 0);
+    cur_mreg = cur_mreg->next;
+  }
   return;
 }
 
@@ -80,6 +89,12 @@ void PARMCI_Fence(int proc) {
   * a no-op since get/put/acc already guarantee remote completion.
   */
 void PARMCI_AllFence(void) {
+  gmr_t *cur_mreg = gmr_list;
+
+  while (cur_mreg) {
+    gmr_flushall(cur_mreg, 0);
+    cur_mreg = cur_mreg->next;
+  }
   return;
 }
 
@@ -106,26 +121,14 @@ int ARMCI_Uses_shm_grp(ARMCI_Group *group) {
   * @param[in]  size Number of bytes to copy
   */
 void ARMCI_Copy(void *src, void *dst, int size) {
-#ifndef COPY_WITH_SENDRECV
-  memcpy(dst, src, size);
-#else
-  static MPI_Comm copy_comm = MPI_COMM_NULL;
-
-  if (copy_comm == MPI_COMM_NULL)
-    MPI_Comm_dup(MPI_COMM_SELF, &copy_comm);
-
-  MPI_Sendrecv(src, size, MPI_BYTE,
-      0 /* rank */, 0 /* tag */,
-      dst, size, MPI_BYTE,
-      0 /* rank */, 0 /* tag */,
-      copy_comm, MPI_STATUS_IGNORE);
-#endif
+  memmove(dst, src, size);
 }
 
 
 /** Zero out the given buffer.
   */
 void ARMCII_Bzero(void *buf, armci_size_t size) {
+	/* Jeff: Why not use memset? */
   armci_size_t i;
   uint8_t *buf_b = (uint8_t *)buf;
 
@@ -134,7 +137,7 @@ void ARMCII_Bzero(void *buf, armci_size_t size) {
 }
 
 
-static const unsigned char log2_table[256] = 
+static const unsigned char log2_table[256] = /* NO RACE */
     { 0, 0, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4,
       4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
       5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 6,
@@ -167,8 +170,8 @@ int ARMCII_Log2(unsigned int val) {
 
 /** Retrieve the value of a boolean environment variable.
   */
-int ARMCII_Getenv_bool(char *varname, int default_value) {
-  char *var = getenv(varname);
+int ARMCII_Getenv_bool(const char *varname, int default_value) {
+  const char *var = getenv(varname);
 
   if (var == NULL)
     return default_value;
@@ -183,17 +186,22 @@ int ARMCII_Getenv_bool(char *varname, int default_value) {
 
 /** Retrieve the value of a environment variable.
   */
-char *ARMCII_Getenv(char *varname) {
+char *ARMCII_Getenv(const char *varname) {
   return getenv(varname);
 }
 
 
 /** Retrieve the value of an integer environment variable.
   */
-int ARMCII_Getenv_int(char *varname, int default_value) {
-  char *var = getenv("ARMCI_IOV_BATCHED_LIMIT");
+int ARMCII_Getenv_int(const char *varname, int default_value) {
+  const char *var = getenv(varname);
   if (var) 
     return atoi(var);
   else
     return default_value;
+}
+
+void ARMCIX_Progress(void)
+{
+    gmr_progress();
 }

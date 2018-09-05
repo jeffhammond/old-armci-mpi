@@ -4,6 +4,8 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
+#include <float.h>
 
 #include <armci.h>
 #include <armci_internals.h>
@@ -40,10 +42,8 @@ int ARMCII_Buf_prepare_read_vec(void **orig_bufs, void ***new_bufs_ptr, int coun
         MPI_Alloc_mem(size, MPI_INFO_NULL, &new_bufs[i]);
         ARMCII_Assert(new_bufs[i] != NULL);
 
-        gmr_dla_lock(mreg);
         ARMCI_Copy(orig_bufs[i], new_bufs[i], size);
         // gmr_get(mreg, orig_bufs[i], new_bufs[i], size, ARMCI_GROUP_WORLD.rank);
-        gmr_dla_unlock(mreg);
 
         num_moved++;
       } else {
@@ -119,14 +119,8 @@ int ARMCII_Buf_prepare_acc_vec(void **orig_bufs, void ***new_bufs_ptr, int count
       MPI_Alloc_mem(size, MPI_INFO_NULL, &new_bufs[i]);
       ARMCII_Assert(new_bufs[i] != NULL);
 
-      // Lock if needed so we can directly access the buffer
-      if (mreg != NULL)
-        gmr_dla_lock(mreg);
-
       ARMCII_Buf_acc_scale(orig_bufs[i], new_bufs[i], size, datatype, scale);
 
-      if (mreg != NULL)
-        gmr_dla_unlock(mreg);
     } else {
       new_bufs[i] = orig_bufs[i];
     }
@@ -137,9 +131,7 @@ int ARMCII_Buf_prepare_acc_vec(void **orig_bufs, void ***new_bufs_ptr, int count
         MPI_Alloc_mem(size, MPI_INFO_NULL, &new_bufs[i]);
         ARMCII_Assert(new_bufs[i] != NULL);
 
-        gmr_dla_lock(mreg);
         ARMCI_Copy(orig_bufs[i], new_bufs[i], size);
-        gmr_dla_unlock(mreg);
       }
     }
 
@@ -236,10 +228,8 @@ void ARMCII_Buf_finish_write_vec(void **orig_bufs, void **new_bufs, int count, i
         gmr_t *mreg = gmr_lookup(orig_bufs[i], ARMCI_GROUP_WORLD.rank);
         ARMCII_Assert(mreg != NULL);
 
-        gmr_dla_lock(mreg);
         ARMCI_Copy(new_bufs[i], orig_bufs[i], size);
         // gmr_put(mreg, new_bufs[i], orig_bufs[i], size, ARMCI_GROUP_WORLD.rank);
-        gmr_dla_unlock(mreg);
 
         MPI_Free_mem(new_bufs[i]);
       }
@@ -249,6 +239,7 @@ void ARMCII_Buf_finish_write_vec(void **orig_bufs, void **new_bufs, int count, i
   }
 }
 
+#define ARMCII_IS_EQUAL(op,thresh,a,b) (op((a)-(b)) < thresh)
 
 /** Check if an operation with the given parameters requires scaling.
   *
@@ -269,22 +260,24 @@ int ARMCII_Buf_acc_is_scaled(int datatype, void *scale) {
       break;
 
     case ARMCI_ACC_FLT:
-      if (*((float*)scale) == 1.0)
+      if (fabsf(*((float*)scale)-1.0f) < FLT_EPSILON)
         return 0;
       break;
 
     case ARMCI_ACC_DBL:
-      if (*((double*)scale) == 1.0)
+      if (fabs(*((double*)scale)-1.0) < DBL_EPSILON)
         return 0;
       break;
 
     case ARMCI_ACC_CPL:
-      if (((float*)scale)[0] == 1.0 && ((float*)scale)[1] == 0.0)
+      if (fabsf(((float*)scale)[0]-1.0f) < FLT_EPSILON && 
+          fabsf(((float*)scale)[1]-0.0f) < FLT_EPSILON)
         return 0;
       break;
 
     case ARMCI_ACC_DCP:
-      if (((double*)scale)[0] == 1.0 && ((double*)scale)[1] == 0.0)
+      if (fabs(((double*)scale)[0]-1.0) < DBL_EPSILON &&
+          fabs(((double*)scale)[1]-0.0) < DBL_EPSILON)
         return 0;
       break;
 
@@ -310,12 +303,10 @@ int ARMCII_Buf_acc_is_scaled(int datatype, void *scale) {
 void ARMCII_Buf_acc_scale(void *buf_in, void *buf_out, int size, int datatype, void *scale) {
   int   j, nelem;
   int   type_size = -1;
-  MPI_Datatype type;
 
   switch (datatype) {
     case ARMCI_ACC_INT:
       MPI_Type_size(MPI_INT, &type_size);
-      type = MPI_INT;
       nelem= size/type_size;
 
       {
@@ -330,7 +321,6 @@ void ARMCII_Buf_acc_scale(void *buf_in, void *buf_out, int size, int datatype, v
 
     case ARMCI_ACC_LNG:
       MPI_Type_size(MPI_LONG, &type_size);
-      type = MPI_LONG;
       nelem= size/type_size;
 
       {
@@ -345,7 +335,6 @@ void ARMCII_Buf_acc_scale(void *buf_in, void *buf_out, int size, int datatype, v
 
     case ARMCI_ACC_FLT:
       MPI_Type_size(MPI_FLOAT, &type_size);
-      type = MPI_FLOAT;
       nelem= size/type_size;
 
       {
@@ -360,7 +349,6 @@ void ARMCII_Buf_acc_scale(void *buf_in, void *buf_out, int size, int datatype, v
 
     case ARMCI_ACC_DBL:
       MPI_Type_size(MPI_DOUBLE, &type_size);
-      type = MPI_DOUBLE;
       nelem= size/type_size;
 
       {
@@ -375,7 +363,6 @@ void ARMCII_Buf_acc_scale(void *buf_in, void *buf_out, int size, int datatype, v
 
     case ARMCI_ACC_CPL:
       MPI_Type_size(MPI_FLOAT, &type_size);
-      type = MPI_FLOAT;
       nelem= size/type_size;
 
       {
@@ -400,7 +387,6 @@ void ARMCII_Buf_acc_scale(void *buf_in, void *buf_out, int size, int datatype, v
 
     case ARMCI_ACC_DCP:
       MPI_Type_size(MPI_DOUBLE, &type_size);
-      type = MPI_DOUBLE;
       nelem= size/type_size;
 
       {

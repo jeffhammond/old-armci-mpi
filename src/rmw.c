@@ -39,10 +39,7 @@
   */
 int PARMCI_Rmw(int op, void *ploc, void *prem, int value, int proc) {
 
-#ifdef RMA_SUPPORTS_RMW
-
-  int src_is_locked = 0, is_swap = 0, is_long = 0;
-  int count = 1; /* ARMCI_Rmw only supports single elements */
+  int is_swap = 0, is_long = 0;
   MPI_Datatype type;
   MPI_Op       rop;
   gmr_t *src_mreg, *dst_mreg;
@@ -75,90 +72,35 @@ int PARMCI_Rmw(int op, void *ploc, void *prem, int value, int proc) {
 
   /* We hold the DLA lock if (src_mreg != NULL). */
 
-  if (src_mreg) {
-    gmr_dla_lock(src_mreg);
-    src_is_locked = 1;
-  }
-
   if (is_swap) {
-    long swap_val_l;
-    int  swap_val_i;
-    gmr_lock(dst_mreg, proc);
-    gmr_get_accumulate(dst_mreg, ploc /* src */, is_long ? (void*) &swap_val_l : (void*) &swap_val_i /* out */, prem /* dst */, count, type, rop, proc);
-    gmr_unlock(dst_mreg, proc); /* must unlock before touching swap_val */
+    long out_val_l, src_val_l = *((long*)ploc);
+    int  out_val_i, src_val_i = *((int*)ploc);
+
+    gmr_fetch_and_op(dst_mreg, 
+                     is_long ? (void*) &src_val_l : (void*) &src_val_i /* src */,
+                     is_long ? (void*) &out_val_l : (void*) &out_val_i /* out */,
+    		     prem /* dst */, type, rop, proc);
+    gmr_flush(dst_mreg, proc, 0); /* it's a round trip so w.r.t. flush, local=remote */
     if (is_long)
-      *(long*) ploc = swap_val_l;
+      *(long*) ploc = out_val_l;
     else
-      *(int*) ploc = swap_val_i;
+      *(int*) ploc = out_val_i;
   }
   else /* fetch-and-add */ {
-    gmr_lock(dst_mreg, proc);
-    gmr_get_accumulate(dst_mreg, &value /* src */, ploc /* out */, prem /* dst */, count, type, rop, proc);
-    gmr_unlock(dst_mreg, proc);
-  }
+    long fetch_val_l, add_val_l = value;
+    int  fetch_val_i, add_val_i = value;
 
-  if (src_is_locked) {
-    gmr_dla_unlock(src_mreg);
-    src_is_locked = 0;
-  }
-
-#else // if !RMA_SUPPORTS_RMW
-
-  int           is_long;
-  gmr_t *mreg;
-
-  mreg = gmr_lookup(prem, proc);
-  ARMCII_Assert_msg(mreg != NULL, "Invalid remote pointer");
-
-  if (op == ARMCI_SWAP_LONG || op == ARMCI_FETCH_AND_ADD_LONG)
-    is_long = 1;
-  else
-    is_long = 0;
-
-  if (op == ARMCI_SWAP || op == ARMCI_SWAP_LONG) {
-    long swap_val_l;
-    int  swap_val_i;
-
-    ARMCIX_Lock_hdl(mreg->rmw_mutex, 0, proc);
-    PARMCI_Get(prem, is_long ? (void*) &swap_val_l : (void*) &swap_val_i, 
-              is_long ? sizeof(long) : sizeof(int), proc);
-    PARMCI_Put(ploc, prem, is_long ? sizeof(long) : sizeof(int), proc);
-    ARMCIX_Unlock_hdl(mreg->rmw_mutex, 0, proc);
-
-    if (is_long)
-      *(long*) ploc = swap_val_l;
-    else
-      *(int*) ploc = swap_val_i;
-  }
-
-  else if (op == ARMCI_FETCH_AND_ADD || op == ARMCI_FETCH_AND_ADD_LONG) {
-    long fetch_val_l, new_val_l;
-    int  fetch_val_i, new_val_i;
-    
-    ARMCIX_Lock_hdl(mreg->rmw_mutex, 0, proc);
-    PARMCI_Get(prem, is_long ? (void*) &fetch_val_l : (void*) &fetch_val_i,
-              is_long ? sizeof(long) : sizeof(int), proc);
-    
-    if (is_long)
-      new_val_l = fetch_val_l + value;
-    else
-      new_val_i = fetch_val_i + value;
-
-    PARMCI_Put(is_long ? (void*) &new_val_l : (void*) &new_val_i, prem, 
-              is_long ? sizeof(long) : sizeof(int), proc);
-    ARMCIX_Unlock_hdl(mreg->rmw_mutex, 0, proc);
+    gmr_fetch_and_op(dst_mreg,
+                     is_long ? (void*) &add_val_l   : (void*) &add_val_i   /* src */,
+                     is_long ? (void*) &fetch_val_l : (void*) &fetch_val_i /* out */,
+                     prem /* dst */, type, rop, proc);
+    gmr_flush(dst_mreg, proc, 0); /* it's a round trip so w.r.t. flush, local=remote */
 
     if (is_long)
       *(long*) ploc = fetch_val_l;
     else
       *(int*) ploc = fetch_val_i;
   }
-
-  else {
-    ARMCII_Error("invalid operation (%d)", op);
-  }
-
-#endif // RMA_SUPPORTS_RMW
 
   return 0;
 }

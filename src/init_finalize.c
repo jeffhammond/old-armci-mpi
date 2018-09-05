@@ -12,13 +12,65 @@
 #include <debug.h>
 #include <gmr.h>
 
+#ifdef HAVE_PTHREADS
+#include <pthread.h>
+
+#if defined(HAVE_NANOSLEEP)
+
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 199309L
+#endif
+#include <time.h> /* nanosleep */
+
+#elif defined(HAVE_USLEEP)
+
+#ifndef _BSD_SOURCE
+#define _BSD_SOURCE
+#endif
+#include <unistd.h> /* usleep */
+
+#else
+
+#warning No naptime available!
+
+#endif
+
+int progress_active;
+pthread_t ARMCI_Progress_thread;
+
+static void * progress_function(void * arg)
+{
+    volatile int * active = (volatile int*)arg;
+#if defined(HAVE_NANOSLEEP)
+    int naptime = 1000 * ARMCII_GLOBAL_STATE.progress_usleep;
+    struct timespec napstruct = { .tv_sec  = 0,
+                                  .tv_nsec = naptime };
+#elif defined(HAVE_USLEEP)
+    int naptime = ARMCII_GLOBAL_STATE.progress_usleep;
+#endif
+
+    while(*active) {
+        ARMCIX_Progress();
+#if defined(HAVE_NANOSLEEP)
+        if (naptime) nanosleep(&napstruct,NULL);
+#elif defined(HAVE_USLEEP)
+        if (naptime) usleep(naptime);
+#endif
+    }
+
+    pthread_exit(NULL);
+
+    return NULL;
+}
+#endif
+
 /* -- begin weak symbols block -- */
 #if defined(HAVE_PRAGMA_WEAK)
-#  pragma weak ARMCI_Init = PARMCI_Init
+#  pragma weak ARMCI_Init_thread = PARMCI_Init_thread
 #elif defined(HAVE_PRAGMA_HP_SEC_DEF)
-#  pragma _HP_SECONDARY_DEF PARMCI_Init ARMCI_Init
+#  pragma _HP_SECONDARY_DEF PARMCI_Init_thread ARMCI_Init_thread
 #elif defined(HAVE_PRAGMA_CRI_DUP)
-#  pragma _CRI duplicate ARMCI_Init as PARMCI_Init
+#  pragma _CRI duplicate ARMCI_Init_thread as PARMCI_Init_thread
 #endif
 /* -- end weak symbols block -- */
 
@@ -28,10 +80,9 @@
   *
   * @return            Zero on success
   */
-int PARMCI_Init(void) {
-  char *var;
+int PARMCI_Init_thread(int armci_requested) {
 
-  /* GA/TCGMSG end up calling ARMCI_Init() multiple times. */
+  /* GA/TCGMSG end up calling ARMCI_Init_thread() multiple times. */
   if (ARMCII_GLOBAL_STATE.init_count > 0) {
     ARMCII_GLOBAL_STATE.init_count++;
     return 0;
@@ -46,6 +97,47 @@ int PARMCI_Init(void) {
       ARMCII_Error("MPI must be initialized before calling ARMCI_Init");
   }
 
+  /* Check for MPI thread-support */
+  {
+    int mpi_provided;
+    MPI_Query_thread(&mpi_provided);
+
+    if (mpi_provided<armci_requested)
+      ARMCII_Error("MPI thread level below ARMCI thread level!");
+  }
+
+#ifdef HAVE_PTHREADS
+  /* Check progress thread settings */
+  {
+    int mpi_thread_level;
+    MPI_Query_thread(&mpi_thread_level);
+
+    ARMCII_GLOBAL_STATE.progress_thread    = ARMCII_Getenv_bool("ARMCI_PROGRESS_THREAD", 0);
+    ARMCII_GLOBAL_STATE.progress_usleep    = ARMCII_Getenv_int("ARMCI_PROGRESS_USLEEP", 0);
+
+    if (ARMCII_GLOBAL_STATE.progress_thread && (mpi_thread_level!=MPI_THREAD_MULTIPLE)) {
+        ARMCII_Warning("ARMCI progress thread requires MPI_THREAD_MULTIPLE (%d); progress thread disabled.\n",
+                       mpi_thread_level);
+        ARMCII_GLOBAL_STATE.progress_thread = 0;
+    }
+
+    if (ARMCII_GLOBAL_STATE.progress_thread && (ARMCII_GLOBAL_STATE.progress_usleep < 0)) {
+        ARMCII_Warning("ARMCI progress thread is not a time machine. (%d)\n",
+                       ARMCII_GLOBAL_STATE.progress_usleep);
+        ARMCII_GLOBAL_STATE.progress_usleep = -ARMCII_GLOBAL_STATE.progress_usleep;
+    }
+  }
+#endif
+
+  /* Check for MPI thread-support */
+  {
+    int mpi_provided;
+    MPI_Query_thread(&mpi_provided);
+
+    if (mpi_provided<armci_requested)
+      ARMCII_Error("MPI thread level below ARMCI thread level!");
+  }
+
   /* Set defaults */
 #ifdef ARMCI_GROUP
   ARMCII_GLOBAL_STATE.noncollective_groups = 1;
@@ -57,7 +149,13 @@ int PARMCI_Init(void) {
   /* Check for debugging flags */
 
   ARMCII_GLOBAL_STATE.debug_alloc          = ARMCII_Getenv_bool("ARMCI_DEBUG_ALLOC", 0);
-  ARMCII_GLOBAL_STATE.debug_flush_barriers = ARMCII_Getenv_bool("ARMCI_FLUSH_BARRIERS", 1);
+  {
+    int junk;
+    junk = ARMCII_Getenv_bool("ARMCI_FLUSH_BARRIERS", -1);
+    if (junk != -1) {
+      ARMCII_Warning("ARMCI_FLUSH_BARRIERS is deprecated.\n");
+    }
+  }
   ARMCII_GLOBAL_STATE.verbose              = ARMCII_Getenv_bool("ARMCI_VERBOSE", 0);
 
   /* Group formation options */
@@ -76,10 +174,15 @@ int PARMCI_Init(void) {
     ARMCII_GLOBAL_STATE.iov_batched_limit = 0;
   }
 
-  var = ARMCII_Getenv("ARMCI_IOV_METHOD");
+#if defined(OPEN_MPI)
+  ARMCII_GLOBAL_STATE.iov_method = ARMCII_IOV_BATCHED;
+#else
+  /* DIRECT leads to addr=NULL errors when ARMCI_{GetV,PutV} are used
+   * Jeff: Is this still true? */
+  ARMCII_GLOBAL_STATE.iov_method = ARMCII_IOV_DIRECT;
+#endif
 
-  ARMCII_GLOBAL_STATE.iov_method = ARMCII_IOV_AUTO;
-
+  char *var = ARMCII_Getenv("ARMCI_IOV_METHOD");
   if (var != NULL) {
     if (strcmp(var, "AUTO") == 0)
       ARMCII_GLOBAL_STATE.iov_method = ARMCII_IOV_AUTO;
@@ -95,10 +198,13 @@ int PARMCI_Init(void) {
 
   /* Check for Strided flags */
 
-  var = ARMCII_Getenv("ARMCI_STRIDED_METHOD");
-
+#if defined(OPEN_MPI)
+  ARMCII_GLOBAL_STATE.strided_method = ARMCII_STRIDED_IOV;
+#else
   ARMCII_GLOBAL_STATE.strided_method = ARMCII_STRIDED_DIRECT;
+#endif
 
+  var = ARMCII_Getenv("ARMCI_STRIDED_METHOD");
   if (var != NULL) {
     if (strcmp(var, "IOV") == 0)
       ARMCII_GLOBAL_STATE.strided_method = ARMCII_STRIDED_IOV;
@@ -108,12 +214,18 @@ int PARMCI_Init(void) {
       ARMCII_Warning("Ignoring unknown value for ARMCI_STRIDED_METHOD (%s)\n", var);
   }
 
+#ifdef OPEN_MPI
+  if (ARMCII_GLOBAL_STATE.iov_method == ARMCII_IOV_DIRECT ||
+      ARMCII_GLOBAL_STATE.strided_method == ARMCII_STRIDED_DIRECT)
+      ARMCII_Warning("MPI Datatypes are broken in RMA in older versions of Open-MPI!\n");
+#endif
+
   /* Shared buffer handling method */
 
+  /* The default used to be COPY.  NOGUARD requires MPI_WIN_UNIFIED. */
+  ARMCII_GLOBAL_STATE.shr_buf_method = ARMCII_SHR_BUF_NOGUARD;
+
   var = ARMCII_Getenv("ARMCI_SHR_BUF_METHOD");
-
-  ARMCII_GLOBAL_STATE.shr_buf_method = ARMCII_SHR_BUF_COPY;
-
   if (var != NULL) {
     if (strcmp(var, "COPY") == 0)
       ARMCII_GLOBAL_STATE.shr_buf_method = ARMCII_SHR_BUF_COPY;
@@ -123,6 +235,31 @@ int PARMCI_Init(void) {
       ARMCII_Warning("Ignoring unknown value for ARMCI_SHR_BUF_METHOD (%s)\n", var);
   }
 
+  /* Use win_allocate or not, to work around MPI-3 RMA implementation bugs (now fixed) in MPICH. */
+
+  int win_alloc_default = 1;
+  ARMCII_GLOBAL_STATE.use_win_allocate=ARMCII_Getenv_bool("ARMCI_USE_WIN_ALLOCATE", win_alloc_default);
+
+  /* Poke the MPI progress engine at the end of nonblocking (NB) calls */
+
+  ARMCII_GLOBAL_STATE.explicit_nb_progress=ARMCII_Getenv_bool("ARMCI_EXPLICIT_NB_PROGRESS", 1);
+
+  /* Pass alloc_shm to win_allocate / alloc_mem */
+
+  ARMCII_GLOBAL_STATE.use_alloc_shm=ARMCII_Getenv_bool("ARMCI_USE_ALLOC_SHM", 1);
+
+  /* Enable RMA element-wise atomicity */
+
+  ARMCII_GLOBAL_STATE.rma_atomicity=ARMCII_Getenv_bool("ARMCI_RMA_ATOMICITY", 1);
+
+  /* Flush_local becomes flush */
+
+  ARMCII_GLOBAL_STATE.end_to_end_flush=ARMCII_Getenv_bool("ARMCI_NO_FLUSH_LOCAL", 0);
+
+  /* Use MPI_MODE_NOCHECK assertion */
+
+  ARMCII_GLOBAL_STATE.rma_nocheck=ARMCII_Getenv_bool("ARMCI_RMA_NOCHECK", 1);
+
   /* Setup groups and communicators */
 
   MPI_Comm_dup(MPI_COMM_WORLD, &ARMCI_GROUP_WORLD.comm);
@@ -131,11 +268,11 @@ int PARMCI_Init(void) {
 
   /* Create GOP operators */
 
-  MPI_Op_create(ARMCII_Absmin_op, 1 /* commute */, &MPI_ABSMIN_OP);
-  MPI_Op_create(ARMCII_Absmax_op, 1 /* commute */, &MPI_ABSMAX_OP);
+  MPI_Op_create(ARMCII_Absmin_op, 1 /* commute */, &ARMCI_ARMCI_MPI_ABSMIN_OP);
+  MPI_Op_create(ARMCII_Absmax_op, 1 /* commute */, &ARMCI_ARMCI_MPI_ABSMAX_OP);
 
-  MPI_Op_create(ARMCII_Msg_sel_min_op, 1 /* commute */, &MPI_SELMIN_OP);
-  MPI_Op_create(ARMCII_Msg_sel_max_op, 1 /* commute */, &MPI_SELMAX_OP);
+  MPI_Op_create(ARMCII_Msg_sel_min_op, 1 /* commute */, &ARMCI_MPI_SELMIN_OP);
+  MPI_Op_create(ARMCII_Msg_sel_max_op, 1 /* commute */, &ARMCI_MPI_SELMAX_OP);
 
   ARMCII_GLOBAL_STATE.init_count++;
 
@@ -149,6 +286,25 @@ int PARMCI_Init(void) {
 #ifdef NO_SEATBELTS
       printf("  NO_SEATBELTS           = ENABLED\n");
 #endif
+
+#ifdef HAVE_PTHREADS
+      printf("  PROGRESS_THREAD        = %s\n", ARMCII_GLOBAL_STATE.progress_thread ? "ENABLED" : "DISABLED");
+      if (ARMCII_GLOBAL_STATE.progress_thread) {
+          printf("  PROGRESS_USLEEP        = %d\n", ARMCII_GLOBAL_STATE.progress_usleep);
+      }
+#endif
+
+      printf("  ALLOC_SHM used         = %s\n", ARMCII_GLOBAL_STATE.use_alloc_shm ? "TRUE" : "FALSE");
+      printf("  WINDOW type used       = %s\n", ARMCII_GLOBAL_STATE.use_win_allocate ? "ALLOCATE" : "CREATE");
+      if (ARMCII_GLOBAL_STATE.use_win_allocate) {
+          /* Jeff: Using win_allocate leads to correctness issues with some
+           *       MPI implementations since 3c4ad2abc8c387fcdec3a7f3f44fa5fd75653ece. */
+          /* This is required on Cray systems with CrayMPI 7.0.0 (at least) */
+          /* Update (Feb. 2015): Xin and Min found the bug in Fetch_and_op and 
+           *                     it is fixed upstream. */
+          ARMCII_Warning("MPI_Win_allocate can lead to correctness issues.\n");
+      }
+
       printf("  STRIDED_METHOD         = %s\n", ARMCII_Strided_methods_str[ARMCII_GLOBAL_STATE.strided_method]);
       printf("  IOV_METHOD             = %s\n", ARMCII_Iov_methods_str[ARMCII_GLOBAL_STATE.iov_method]);
 
@@ -166,13 +322,25 @@ int PARMCI_Init(void) {
       printf("  NONCOLLECTIVE_GROUPS   = %s\n", ARMCII_GLOBAL_STATE.noncollective_groups   ? "TRUE" : "FALSE");
       printf("  CACHE_RANK_TRANSLATION = %s\n", ARMCII_GLOBAL_STATE.cache_rank_translation ? "TRUE" : "FALSE");
       printf("  DEBUG_ALLOC            = %s\n", ARMCII_GLOBAL_STATE.debug_alloc            ? "TRUE" : "FALSE");
-      printf("  FLUSH_BARRIERS         = %s\n", ARMCII_GLOBAL_STATE.debug_flush_barriers   ? "TRUE" : "FALSE");
       printf("\n");
       fflush(NULL);
     }
 
     MPI_Barrier(ARMCI_GROUP_WORLD.comm);
   }
+
+#ifdef HAVE_PTHREADS
+    /* Create the asynchronous progress thread */
+    {
+        if(ARMCII_GLOBAL_STATE.progress_thread) {
+            progress_active = 1;
+            int rc = pthread_create(&ARMCI_Progress_thread, NULL, &progress_function, &progress_active);
+            if (rc) {
+                ARMCII_Warning("ARMCI progress thread creation failed (%d).\n", rc);
+            }
+        }
+    }
+#endif
 
   return 0;
 }
@@ -197,7 +365,28 @@ int PARMCI_Init(void) {
   * @return            Zero on success
   */
 int PARMCI_Init_args(int *argc, char ***argv) {
-  return PARMCI_Init();
+  return PARMCI_Init_thread(MPI_THREAD_SINGLE);
+}
+
+
+/* -- begin weak symbols block -- */
+#if defined(HAVE_PRAGMA_WEAK)
+#  pragma weak ARMCI_Init = PARMCI_Init
+#elif defined(HAVE_PRAGMA_HP_SEC_DEF)
+#  pragma _HP_SECONDARY_DEF PARMCI_Init ARMCI_Init
+#elif defined(HAVE_PRAGMA_CRI_DUP)
+#  pragma _CRI duplicate ARMCI_Init as PARMCI_Init
+#endif
+/* -- end weak symbols block -- */
+
+/** Initialize ARMCI.  MPI must be initialized before this can be called.  It
+  * is invalid to make ARMCI calls before initialization.  Collective on the
+  * world group.
+  *
+  * @return            Zero on success
+  */
+int PARMCI_Init(void) {
+  return PARMCI_Init_thread(MPI_THREAD_SINGLE);
 }
 
 
@@ -250,6 +439,19 @@ int PARMCI_Finalize(void) {
     return 0;
   }
 
+#ifdef HAVE_PTHREADS
+    /* Destroy the asynchronous progress thread */
+    {
+        if(ARMCII_GLOBAL_STATE.progress_thread) {
+            progress_active = 0;
+            int rc = pthread_join(ARMCI_Progress_thread, NULL);
+            if (rc) {
+                ARMCII_Warning("ARMCI progress thread join failed (%d).\n", rc);
+            }
+        }
+    }
+#endif
+
   nfreed = gmr_destroy_all();
 
   if (nfreed > 0 && ARMCI_GROUP_WORLD.rank == 0)
@@ -257,11 +459,11 @@ int PARMCI_Finalize(void) {
 
   /* Free GOP operators */
 
-  MPI_Op_free(&MPI_ABSMIN_OP);
-  MPI_Op_free(&MPI_ABSMAX_OP);
+  MPI_Op_free(&ARMCI_ARMCI_MPI_ABSMIN_OP);
+  MPI_Op_free(&ARMCI_ARMCI_MPI_ABSMAX_OP);
 
-  MPI_Op_free(&MPI_SELMIN_OP);
-  MPI_Op_free(&MPI_SELMAX_OP);
+  MPI_Op_free(&ARMCI_MPI_SELMIN_OP);
+  MPI_Op_free(&ARMCI_MPI_SELMAX_OP);
 
   ARMCI_Cleanup();
 

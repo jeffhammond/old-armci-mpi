@@ -7,6 +7,8 @@
 
 #include <mpi.h>
 
+#define ARMCI_MPI 3
+
 enum  ARMCI_Acc_e { ARMCI_ACC_INT /*     int */, ARMCI_ACC_LNG /*           long */,
                     ARMCI_ACC_FLT /*   float */, ARMCI_ACC_DBL /*         double */,
                     ARMCI_ACC_CPL /* complex */, ARMCI_ACC_DCP /* double complex */ };
@@ -15,12 +17,13 @@ typedef long armci_size_t;
 
 int   ARMCI_Init(void);
 int   ARMCI_Init_args(int *argc, char ***argv);
+int   ARMCI_Init_thread(int armci_requested);
 int   ARMCI_Initialized(void);
-   
+
 int   ARMCI_Finalize(void);
 void  ARMCI_Cleanup(void);
 
-void  ARMCI_Error(char *msg, int code);
+void  ARMCI_Error(const char *msg, int code);
 
 int   ARMCI_Malloc(void **base_ptrs, armci_size_t size);
 int   ARMCI_Free(void *ptr);
@@ -42,10 +45,10 @@ int   ARMCI_Put(void *src, void *dst, int size, int target);
 int   ARMCI_Acc(int datatype, void *scale, void *src, void *dst, int bytes, int proc);
 
 int   ARMCI_PutS(void *src_ptr, int src_stride_ar[/*stride_levels*/],
-                 void *dst_ptr, int dst_stride_ar[/*stride_levels*/], 
+                 void *dst_ptr, int dst_stride_ar[/*stride_levels*/],
                  int count[/*stride_levels+1*/], int stride_levels, int proc);
 int   ARMCI_GetS(void *src_ptr, int src_stride_ar[/*stride_levels*/],
-                 void *dst_ptr, int dst_stride_ar[/*stride_levels*/], 
+                 void *dst_ptr, int dst_stride_ar[/*stride_levels*/],
                  int count[/*stride_levels+1*/], int stride_levels, int proc);
 int   ARMCI_AccS(int datatype, void *scale,
                  void *src_ptr, int src_stride_ar[/*stride_levels*/],
@@ -54,16 +57,17 @@ int   ARMCI_AccS(int datatype, void *scale,
 
 int   ARMCI_Put_flag(void *src, void* dst, int size, int *flag, int value, int proc);
 int   ARMCI_PutS_flag(void *src_ptr, int src_stride_ar[/*stride_levels*/],
-                 void *dst_ptr, int dst_stride_ar[/*stride_levels*/], 
-                 int count[/*stride_levels+1*/], int stride_levels, 
+                 void *dst_ptr, int dst_stride_ar[/*stride_levels*/],
+                 int count[/*stride_levels+1*/], int stride_levels,
                  int *flag, int value, int proc);
 
 
-/** Non-blocking ops.  MPI-2 forces remote completion on everything so these all
-  * currently behave the same as the blocking ops.
-  */
-
-typedef int armci_hdl_t;
+typedef struct armci_hdl_s
+{
+    int target;    /* we do not actually support individual completion */
+    int aggregate;
+}
+armci_hdl_t;
 
 void  ARMCI_INIT_HANDLE(armci_hdl_t *hdl);
 void  ARMCI_SET_AGGREGATE_HANDLE(armci_hdl_t* handle);
@@ -75,13 +79,14 @@ int   ARMCI_NbAcc(int datatype, void *scale, void *src, void *dst, int bytes, in
 
 int   ARMCI_Wait(armci_hdl_t* hdl);
 int   ARMCI_Test(armci_hdl_t* hdl);
+int   ARMCI_WaitProc(int proc);
 int   ARMCI_WaitAll(void);
 
 int   ARMCI_NbPutS(void *src_ptr, int src_stride_ar[/*stride_levels*/],
-                   void *dst_ptr, int dst_stride_ar[/*stride_levels*/], 
+                   void *dst_ptr, int dst_stride_ar[/*stride_levels*/],
                    int count[/*stride_levels+1*/], int stride_levels, int proc, armci_hdl_t *hdl);
 int   ARMCI_NbGetS(void *src_ptr, int src_stride_ar[/*stride_levels*/],
-                   void *dst_ptr, int dst_stride_ar[/*stride_levels*/], 
+                   void *dst_ptr, int dst_stride_ar[/*stride_levels*/],
                    int count[/*stride_levels+1*/], int stride_levels, int proc, armci_hdl_t *hdl);
 int   ARMCI_NbAccS(int datatype, void *scale,
                    void *src_ptr, int src_stride_ar[/*stride_levels*/],
@@ -126,8 +131,8 @@ int ARMCI_NbPutValueDouble(double src, void *dst, int proc, armci_hdl_t *hdl);
 
 int    ARMCI_GetValueInt(void *src, int proc);
 long   ARMCI_GetValueLong(void *src, int proc);
-float  ARMCI_GetValueFloat(void *src, int proc);     
-double ARMCI_GetValueDouble(void *src, int proc);     
+float  ARMCI_GetValueFloat(void *src, int proc);
+double ARMCI_GetValueDouble(void *src, int proc);
 
 
 /** Mutexes
@@ -141,7 +146,7 @@ void  ARMCI_Unlock(int mutex, int proc);
 /** ARMCI Read-Modify-Write API
   */
 
-enum ARMCI_Rmw_e { ARMCI_FETCH_AND_ADD, ARMCI_FETCH_AND_ADD_LONG, 
+enum ARMCI_Rmw_e { ARMCI_FETCH_AND_ADD, ARMCI_FETCH_AND_ADD_LONG,
                    ARMCI_SWAP, ARMCI_SWAP_LONG };
 
 int ARMCI_Rmw(int op, void *ploc, void *prem, int value, int proc);
@@ -207,6 +212,7 @@ int  ARMCI_Uses_shm_grp(ARMCI_Group *group);
 
 int     PARMCI_Init(void);
 int     PARMCI_Init_args(int *argc, char ***argv);
+int     PARMCI_Init_thread(int armci_requested);
 int     PARMCI_Initialized(void);
 int     PARMCI_Finalize(void);
 
@@ -225,14 +231,14 @@ int     PARMCI_Get(void *src, void *dst, int size, int target);
 int     PARMCI_Put(void *src, void *dst, int size, int target);
 int     PARMCI_Acc(int datatype, void *scale, void *src, void *dst, int bytes, int proc);
 
-int     PARMCI_PutS(void *src_ptr, int src_stride_ar[], void *dst_ptr, int dst_stride_ar[], 
+int     PARMCI_PutS(void *src_ptr, int src_stride_ar[], void *dst_ptr, int dst_stride_ar[],
                  int count[], int stride_levels, int proc);
-int     PARMCI_GetS(void *src_ptr, int src_stride_ar[], void *dst_ptr, int dst_stride_ar[], 
+int     PARMCI_GetS(void *src_ptr, int src_stride_ar[], void *dst_ptr, int dst_stride_ar[],
                  int count[], int stride_levels, int proc);
 int     PARMCI_AccS(int datatype, void *scale, void *src_ptr, int src_stride_ar[],
                  void *dst_ptr, int dst_stride_ar[], int count[], int stride_levels, int proc);
 int     PARMCI_Put_flag(void *src, void* dst, int size, int *flag, int value, int proc);
-int     PARMCI_PutS_flag(void *src_ptr, int src_stride_ar[], void *dst_ptr, int dst_stride_ar[], 
+int     PARMCI_PutS_flag(void *src_ptr, int src_stride_ar[], void *dst_ptr, int dst_stride_ar[],
                  int count[], int stride_levels, int *flag, int value, int proc);
 
 int     PARMCI_PutV(armci_giov_t *iov, int iov_len, int proc);
@@ -241,14 +247,15 @@ int     PARMCI_AccV(int datatype, void *scale, armci_giov_t *iov, int iov_len, i
 
 int     PARMCI_Wait(armci_hdl_t* hdl);
 int     PARMCI_Test(armci_hdl_t* hdl);
+int     PARMCI_WaitProc(int proc);
 int     PARMCI_WaitAll(void);
 
 int     PARMCI_NbPut(void *src, void *dst, int bytes, int proc, armci_hdl_t *hdl);
 int     PARMCI_NbGet(void *src, void *dst, int bytes, int proc, armci_hdl_t *hdl);
 int     PARMCI_NbAcc(int datatype, void *scale, void *src, void *dst, int bytes, int proc, armci_hdl_t *hdl);
-int     PARMCI_NbPutS(void *src_ptr, int src_stride_ar[], void *dst_ptr, int dst_stride_ar[], 
+int     PARMCI_NbPutS(void *src_ptr, int src_stride_ar[], void *dst_ptr, int dst_stride_ar[],
                    int count[], int stride_levels, int proc, armci_hdl_t *hdl);
-int     PARMCI_NbGetS(void *src_ptr, int src_stride_ar[], void *dst_ptr, int dst_stride_ar[], 
+int     PARMCI_NbGetS(void *src_ptr, int src_stride_ar[], void *dst_ptr, int dst_stride_ar[],
                    int count[], int stride_levels, int proc, armci_hdl_t *hdl);
 int     PARMCI_NbAccS(int datatype, void *scale, void *src_ptr, int src_stride_ar[],
                    void *dst_ptr, int dst_stride_ar[], int count[], int stride_levels, int proc, armci_hdl_t *hdl);

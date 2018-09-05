@@ -14,19 +14,6 @@
 #  include <inttypes.h>
 #endif
 
-/** Access mode extensions: set the access mode for an ARMCI allocation,
-  * enabling runtime layer optimizations.
-  */
-
-enum armcix_access_mode_e {
-  ARMCIX_MODE_ALL           = 0x1,  /* All access types permitted          */
-  ARMCIX_MODE_CONFLICT_FREE = 0x2,  /* Operations do not conflict          */
-  ARMCIX_MODE_NO_LOAD_STORE = 0x4   /* Load/store operations not permitted */
-};
-
-int ARMCIX_Mode_set(int mode, void *ptr, ARMCI_Group *group);
-int ARMCIX_Mode_get(void *ptr);
-
 /** Processor group extensions.
   */
 
@@ -53,5 +40,7 @@ int  ARMCIX_Destroy_mutexes_hdl(armcix_mutex_hdl_t hdl);
 void ARMCIX_Lock_hdl(armcix_mutex_hdl_t hdl, int mutex, int proc);
 int  ARMCIX_Trylock_hdl(armcix_mutex_hdl_t hdl, int mutex, int proc);
 void ARMCIX_Unlock_hdl(armcix_mutex_hdl_t hdl, int mutex, int proc);
+
+void ARMCIX_Progress(void);
 
 #endif /* _ARMCIX_H_ */

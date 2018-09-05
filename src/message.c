@@ -108,10 +108,6 @@ void armci_msg_bcast_scope(int scope, void *buffer, int len, int root) {
   */
 void parmci_msg_barrier(void) {
   MPI_Barrier(ARMCI_GROUP_WORLD.comm);
-
-  if (ARMCII_GLOBAL_STATE.debug_flush_barriers) {
-    ARMCII_Flush_local();
-  }
 }
 
 
@@ -131,10 +127,6 @@ void parmci_msg_barrier(void) {
   */
 void parmci_msg_group_barrier(ARMCI_Group *group) {
   MPI_Barrier(group->comm);
-
-  if (ARMCII_GLOBAL_STATE.debug_flush_barriers) {
-    ARMCII_Flush_local();
-  }
 }
 
 
@@ -290,8 +282,8 @@ typedef struct {
 
 /** Select operations to be used in allreduce.
   */
-MPI_Op MPI_SELMIN_OP;
-MPI_Op MPI_SELMAX_OP;
+MPI_Op ARMCI_MPI_SELMIN_OP;
+MPI_Op ARMCI_MPI_SELMAX_OP;
 
 
 /** Min operator for armci_msg_sel
@@ -427,9 +419,9 @@ void armci_msg_sel_scope(int scope, void *x, int n, char* op, int type, int cont
     ARMCI_Copy(x, data_in->data, n);
 
   if (strncmp(op, "min", 3) == 0) {
-    MPI_Allreduce(data_in, data_out, sizeof(sel_data_t)+n-1, MPI_BYTE, MPI_SELMIN_OP, sel_comm);
+    MPI_Allreduce(data_in, data_out, sizeof(sel_data_t)+n-1, MPI_BYTE, ARMCI_MPI_SELMIN_OP, sel_comm);
   } else if (strncmp(op, "max", 3) == 0) {
-    MPI_Allreduce(data_in, data_out, sizeof(sel_data_t)+n-1, MPI_BYTE, MPI_SELMAX_OP, sel_comm);
+    MPI_Allreduce(data_in, data_out, sizeof(sel_data_t)+n-1, MPI_BYTE, ARMCI_MPI_SELMAX_OP, sel_comm);
   } else {
       ARMCII_Error("Invalid operation (%s)", op);
   }
