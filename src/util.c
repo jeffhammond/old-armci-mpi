@@ -219,7 +219,7 @@ void ARMCIX_Progress(void)
     gmr_progress();
 }
 
-/** Copy local data.
+/** Determine if a window supports the unified memory model.
   *
   * @param[in]  win  Window
   * @param[out] ret  1=UNIFIED, 0=SEPARATE, -1=N/A
