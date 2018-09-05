@@ -123,7 +123,7 @@ int ARMCII_Iov_check_same_allocation(void **ptrs, int count, int proc) {
   * @return                Zero on success, error code otherwise
   */
 int ARMCII_Iov_op_dispatch(enum ARMCII_Op_e op, void **src, void **dst, int count, int size,
-    int datatype, int overlapping, int same_alloc, int proc) {
+    int datatype, int overlapping, int same_alloc, int proc, int blocking) {
 
   MPI_Datatype type;
   int type_count, type_size;
@@ -146,7 +146,12 @@ int ARMCII_Iov_op_dispatch(enum ARMCII_Op_e op, void **src, void **dst, int coun
   if (overlapping || !same_alloc || ARMCII_GLOBAL_STATE.iov_method == ARMCII_IOV_CONSRV) {
     if (overlapping) ARMCII_Warning("IOV remote buffers overlap\n");
     if (!same_alloc) ARMCII_Warning("IOV remote buffers are not within the same allocation\n");
+#if 0
     return ARMCII_Iov_op_safe(op, src, dst, count, type_count, type, proc);
+#else
+    /* Jeff: We are going to always block when there is buffer overlap. */
+    return ARMCII_Iov_op_batched(op, src, dst, count, type_count, type, proc, 1 /* consrv */, 1 /* blocking */);
+#endif
   }
 
   // OPTIMIZED CASE: It's safe for us to issue all the operations under a
@@ -154,10 +159,10 @@ int ARMCII_Iov_op_dispatch(enum ARMCII_Op_e op, void **src, void **dst, int coun
 
   else if (   ARMCII_GLOBAL_STATE.iov_method == ARMCII_IOV_DIRECT
            || ARMCII_GLOBAL_STATE.iov_method == ARMCII_IOV_AUTO  ) {
-    return ARMCII_Iov_op_datatype(op, src, dst, count, type_count, type, proc);
+    return ARMCII_Iov_op_datatype(op, src, dst, count, type_count, type, proc, blocking);
 
   } else if (ARMCII_GLOBAL_STATE.iov_method == ARMCII_IOV_BATCHED) {
-    return ARMCII_Iov_op_batched(op, src, dst, count, type_count, type, proc);
+    return ARMCII_Iov_op_batched(op, src, dst, count, type_count, type, proc, 0 /* not consrv */, blocking);
 
   } else {
     ARMCII_Error("unknown iov method (%d)\n", ARMCII_GLOBAL_STATE.iov_method);
@@ -165,12 +170,12 @@ int ARMCII_Iov_op_dispatch(enum ARMCII_Op_e op, void **src, void **dst, int coun
   }
 }
 
-
+#if 0
 /** Safe implementation of the ARMCI IOV operation
   */
 int ARMCII_Iov_op_safe(enum ARMCII_Op_e op, void **src, void **dst, int count, int elem_count,
     MPI_Datatype type, int proc) {
-  
+
   int i;
   int flush_local = 0; /* used only for MPI-3 */
 
@@ -179,14 +184,12 @@ int ARMCII_Iov_op_safe(enum ARMCII_Op_e op, void **src, void **dst, int count, i
     void *shr_ptr;
 
     switch(op) {
+      case ARMCII_OP_ACC:
       case ARMCII_OP_PUT:
         shr_ptr = dst[i];
         break;
       case ARMCII_OP_GET:
         shr_ptr = src[i];
-        break;
-      case ARMCII_OP_ACC:
-        shr_ptr = dst[i];
         break;
       default:
         ARMCII_Error("unknown operation (%d)", op);
@@ -219,13 +222,13 @@ int ARMCII_Iov_op_safe(enum ARMCII_Op_e op, void **src, void **dst, int count, i
 
   return 0;
 }
-
+#endif
 
 /** Optimized implementation of the ARMCI IOV operation that uses a single
   * lock/unlock pair.
   */
 int ARMCII_Iov_op_batched(enum ARMCII_Op_e op, void **src, void **dst, int count, int elem_count,
-    MPI_Datatype type, int proc) {
+    MPI_Datatype type, int proc, int consrv, int blocking) {
 
   int i;
   int flush_local = 1; /* used only for MPI-3 */
@@ -233,14 +236,12 @@ int ARMCII_Iov_op_batched(enum ARMCII_Op_e op, void **src, void **dst, int count
   void *shr_ptr;
 
   switch(op) {
+    case ARMCII_OP_ACC:
     case ARMCII_OP_PUT:
       shr_ptr = dst[0];
       break;
     case ARMCII_OP_GET:
       shr_ptr = src[0];
-      break;
-    case ARMCII_OP_ACC:
-      shr_ptr = dst[0];
       break;
     default:
       ARMCII_Error("unknown operation (%d)", op);
@@ -252,9 +253,11 @@ int ARMCII_Iov_op_batched(enum ARMCII_Op_e op, void **src, void **dst, int count
 
   for (i = 0; i < count; i++) {
 
-    if (   ARMCII_GLOBAL_STATE.iov_batched_limit > 0 
-        && i % ARMCII_GLOBAL_STATE.iov_batched_limit == 0
-        && i > 0 )
+    if ( blocking && i > 0 &&
+        ( consrv ||
+         ( ARMCII_GLOBAL_STATE.iov_batched_limit > 0 && i % ARMCII_GLOBAL_STATE.iov_batched_limit == 0)
+        )
+       )
     {
       gmr_flush(mreg, proc, flush_local);
     }
@@ -278,7 +281,9 @@ int ARMCII_Iov_op_batched(enum ARMCII_Op_e op, void **src, void **dst, int count
     }
   }
 
-  gmr_flush(mreg, proc, flush_local);
+  if (blocking) {
+    gmr_flush(mreg, proc, flush_local);
+  }
 
   return 0;
 }
@@ -288,7 +293,7 @@ int ARMCII_Iov_op_batched(enum ARMCII_Op_e op, void **src, void **dst, int count
   * datatype to achieve a one-sided gather/scatter.
   */
 int ARMCII_Iov_op_datatype(enum ARMCII_Op_e op, void **src, void **dst, int count, int elem_count,
-    MPI_Datatype type, int proc) {
+    MPI_Datatype type, int proc, int blocking) {
 
     gmr_t *mreg;
     MPI_Datatype  type_loc, type_rem;
@@ -365,13 +370,15 @@ int ARMCII_Iov_op_datatype(enum ARMCII_Op_e op, void **src, void **dst, int coun
         return 1;
     }
 
-    gmr_flush(mreg, proc, flush_local);
+    if (blocking) {
+      gmr_flush(mreg, proc, flush_local);
+    }
 
     MPI_Type_free(&type_loc);
     MPI_Type_free(&type_rem);
 
     return 0;
-}    
+}
 
 
 /* -- begin weak symbols block -- */
@@ -405,7 +412,8 @@ int PARMCI_PutV(armci_giov_t *iov, int iov_len, int proc) {
     same_alloc  = ARMCII_Iov_check_same_allocation(iov[v].dst_ptr_array, iov[v].ptr_array_len, proc);
 
     ARMCII_Buf_prepare_read_vec(iov[v].src_ptr_array, &src_buf, iov[v].ptr_array_len, iov[v].bytes);
-    ARMCII_Iov_op_dispatch(ARMCII_OP_PUT, src_buf, iov[v].dst_ptr_array, iov[v].ptr_array_len, iov[v].bytes, 0, overlapping, same_alloc, proc);
+    ARMCII_Iov_op_dispatch(ARMCII_OP_PUT, src_buf, iov[v].dst_ptr_array, iov[v].ptr_array_len, iov[v].bytes, 0,
+                           overlapping, same_alloc, proc, 1 /* blocking */);
     ARMCII_Buf_finish_read_vec(iov[v].src_ptr_array, src_buf, iov[v].ptr_array_len, iov[v].bytes);
   }
 
@@ -445,7 +453,8 @@ int PARMCI_GetV(armci_giov_t *iov, int iov_len, int proc) {
     same_alloc  = ARMCII_Iov_check_same_allocation(iov[v].src_ptr_array, iov[v].ptr_array_len, proc);
 
     ARMCII_Buf_prepare_write_vec(iov[v].dst_ptr_array, &dst_buf, iov[v].ptr_array_len, iov[v].bytes);
-    ARMCII_Iov_op_dispatch(ARMCII_OP_GET, iov[v].src_ptr_array, dst_buf, iov[v].ptr_array_len, iov[v].bytes, 0, overlapping, same_alloc, proc);
+    ARMCII_Iov_op_dispatch(ARMCII_OP_GET, iov[v].src_ptr_array, dst_buf, iov[v].ptr_array_len, iov[v].bytes, 0,
+                           overlapping, same_alloc, proc, 1 /* blocking */);
     ARMCII_Buf_finish_write_vec(iov[v].dst_ptr_array, dst_buf, iov[v].ptr_array_len, iov[v].bytes);
   }
 
@@ -484,66 +493,10 @@ int PARMCI_AccV(int datatype, void *scale, armci_giov_t *iov, int iov_len, int p
     same_alloc  = ARMCII_Iov_check_same_allocation(iov[v].dst_ptr_array, iov[v].ptr_array_len, proc);
 
     ARMCII_Buf_prepare_acc_vec(iov[v].src_ptr_array, &src_buf, iov[v].ptr_array_len, iov[v].bytes, datatype, scale);
-    ARMCII_Iov_op_dispatch(ARMCII_OP_ACC, src_buf, iov[v].dst_ptr_array, iov[v].ptr_array_len, iov[v].bytes, datatype, overlapping, same_alloc, proc);
+    ARMCII_Iov_op_dispatch(ARMCII_OP_ACC, src_buf, iov[v].dst_ptr_array, iov[v].ptr_array_len, iov[v].bytes, datatype,
+                           overlapping, same_alloc, proc, 1 /* blocking */);
     ARMCII_Buf_finish_acc_vec(iov[v].src_ptr_array, src_buf, iov[v].ptr_array_len, iov[v].bytes);
   }
 
   return 0;
 }
-
-
-/* -- begin weak symbols block -- */
-#if defined(HAVE_PRAGMA_WEAK)
-#  pragma weak ARMCI_NbPutV = PARMCI_NbPutV
-#elif defined(HAVE_PRAGMA_HP_SEC_DEF)
-#  pragma _HP_SECONDARY_DEF PARMCI_NbPutV ARMCI_NbPutV
-#elif defined(HAVE_PRAGMA_CRI_DUP)
-#  pragma _CRI duplicate ARMCI_NbPutV as PARMCI_NbPutV
-#endif
-/* -- end weak symbols block -- */
-
-int PARMCI_NbPutV(armci_giov_t *iov, int iov_len, int proc, armci_hdl_t* handle) {
-  /* TODO: implement nonblocking properly and then use it to get blocking */
-  if (handle!=NULL) {
-      handle->target = proc;
-  }
-  return PARMCI_PutV(iov, iov_len, proc);
-}
-
-/* -- begin weak symbols block -- */
-#if defined(HAVE_PRAGMA_WEAK)
-#  pragma weak ARMCI_NbGetV = PARMCI_NbGetV
-#elif defined(HAVE_PRAGMA_HP_SEC_DEF)
-#  pragma _HP_SECONDARY_DEF PARMCI_NbGetV ARMCI_NbGetV
-#elif defined(HAVE_PRAGMA_CRI_DUP)
-#  pragma _CRI duplicate ARMCI_NbGetV as PARMCI_NbGetV
-#endif
-/* -- end weak symbols block -- */
-
-int PARMCI_NbGetV(armci_giov_t *iov, int iov_len, int proc, armci_hdl_t* handle) {
-  /* TODO: implement nonblocking properly and then use it to get blocking */
-  if (handle!=NULL) {
-      handle->target = proc;
-  }
-  return PARMCI_GetV(iov, iov_len, proc);
-}
-
-/* -- begin weak symbols block -- */
-#if defined(HAVE_PRAGMA_WEAK)
-#  pragma weak ARMCI_NbAccV = PARMCI_NbAccV
-#elif defined(HAVE_PRAGMA_HP_SEC_DEF)
-#  pragma _HP_SECONDARY_DEF PARMCI_NbAccV ARMCI_NbAccV
-#elif defined(HAVE_PRAGMA_CRI_DUP)
-#  pragma _CRI duplicate ARMCI_NbAccV as PARMCI_NbAccV
-#endif
-/* -- end weak symbols block -- */
-
-int PARMCI_NbAccV(int datatype, void *scale, armci_giov_t *iov, int iov_len, int proc, armci_hdl_t* handle) {
-  /* TODO: implement nonblocking properly and then use it to get blocking */
-  if (handle!=NULL) {
-      handle->target = proc;
-  }
-  return PARMCI_AccV(datatype, scale, iov, iov_len, proc);
-}
-
-

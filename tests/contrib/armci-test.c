@@ -1,55 +1,18 @@
-/* $Id: test.c,v 1.43.6.6 2007-08-30 22:59:27 manoj Exp $ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <unistd.h>
 
-#ifdef WIN32
-#  include <windows.h>
-#  define sleep(x) Sleep(1000*(x))
-#else
-#  include <unistd.h>
-#endif
-
-/* ARMCI is impartial to message-passing libs - we handle them with MP macros */
-#if defined(PVM)
-#   include <pvm3.h>
-#   ifdef CRAY
-#     define MPGROUP         (char *)NULL
-#     define MP_INIT(arc,argv)
-#   else
-#     define MPGROUP           "mp_working_group"
-#     define MP_INIT(arc,argv) pvm_init(arc, argv)
-#   endif
-#   define MP_FINALIZE()     pvm_exit()
-#   define MP_BARRIER()      pvm_barrier(MPGROUP,-1)
-#   define MP_MYID(pid)      *(pid)   = pvm_getinst(MPGROUP,pvm_mytid())
-#   define MP_PROCS(pproc)   *(pproc) = (int)pvm_gsize(MPGROUP)
-    void pvm_init(int argc, char *argv[]);
-#elif defined(TCGMSG)
-#   include <sndrcv.h>
-    long tcg_tag =30000;
-#   define MP_BARRIER()      SYNCH_(&tcg_tag)
-#   define MP_INIT(arc,argv) PBEGIN_((argc),(argv))
-#   define MP_FINALIZE()     PEND_()
-#   define MP_MYID(pid)      *(pid)   = (int)NODEID_()
-#   define MP_PROCS(pproc)   *(pproc) = (int)NNODES_()
-#elif defined(BGML)
-# include "bgml.h"
-# define MP_BARRIER()      bgml_barrier(3);
-# define MP_FINALIZE()
-# define MP_INIT(arc, argv)
-# define MP_MYID(pid)      *(pid)=BGML_Messager_rank();
-# define MP_PROCS(pproc)   *(pproc)=BGML_Messager_size();
-#else
-#   include <mpi.h>
-#   define MP_BARRIER()      MPI_Barrier(MPI_COMM_WORLD)
-#   define MP_FINALIZE()     MPI_Finalize()
-#   define MP_INIT(arc,argv) MPI_Init(&(argc),&(argv))
-#   define MP_MYID(pid)      MPI_Comm_rank(MPI_COMM_WORLD, (pid))
-#   define MP_PROCS(pproc)   MPI_Comm_size(MPI_COMM_WORLD, (pproc));
-#endif
+#include <mpi.h>
+#define MP_BARRIER()      MPI_Barrier(MPI_COMM_WORLD)
+#define MP_FINALIZE()     MPI_Finalize()
+#define MP_INIT(arc,argv) MPI_Init(&(argc),&(argv))
+#define MP_MYID(pid)      MPI_Comm_rank(MPI_COMM_WORLD, (pid))
+#define MP_PROCS(pproc)   MPI_Comm_size(MPI_COMM_WORLD, (pproc));
 
 #include <armci.h>
+
+#define ELEMS 500
 
 #define DIM1 5
 #define DIM2 3
@@ -89,13 +52,6 @@
 #define MAXPROC 128
 #define TIMES 100
 
-#ifdef CRAY
-# define ELEMS 800
-#else
-# define ELEMS 200
-#endif
-
-
 /***************************** macros ************************/
 #define COPY(src, dst, bytes) memcpy((dst),(src),(bytes))
 #define MAX(a,b) (((a) >= (b)) ? (a) : (b))
@@ -105,43 +61,6 @@
 /***************************** global data *******************/
 int me, nproc;
 void* work[MAXPROC]; /* work array for propagating addresses */
-
-
-
-#ifdef PVM
-void pvm_init(int argc, char *argv[])
-{
-    int mytid, mygid, ctid[MAXPROC];
-    int np, i;
-
-    mytid = pvm_mytid();
-    if((argc != 2) && (argc != 1)) goto usage;
-    if(argc == 1) np = 1;
-    if(argc == 2)
-        if((np = atoi(argv[1])) < 1) goto usage;
-    if(np > MAXPROC) goto usage;
-
-    mygid = pvm_joingroup(MPGROUP);
-
-    if(np > 1)
-        if (mygid == 0) 
-            i = pvm_spawn(argv[0], argv+1, 0, "", np-1, ctid);
-
-    while(pvm_gsize(MPGROUP) < np) sleep(1);
-
-    /* sync */
-    pvm_barrier(MPGROUP, np);
-    
-    printf("PVM initialization done!\n");
-    
-    return;
-
-usage:
-    fprintf(stderr, "usage: %s <nproc>\n", argv[0]);
-    pvm_exit();
-    exit(-1);
-}
-#endif
 
 /*\ generate random range for a section of multidimensional array 
 \*/
@@ -287,6 +206,7 @@ void compare_patches(double eps, int ndim, double *patch1, int lo1[], int hi1[],
 	int i,j, elems=1;	
 	int subscr1[MAXDIMS], subscr2[MAXDIMS];
         double diff,max;
+    int offset1 = 0, offset2 = 0;
 
 	for(i=0;i<ndim;i++){   /* count # of elements & verify consistency of both patches */
 		int diff = hi1[i]-lo1[i];
@@ -301,7 +221,7 @@ void compare_patches(double eps, int ndim, double *patch1, int lo1[], int hi1[],
 	
 	/* compare element values in both patches */ 
 	for(j=0; j< elems; j++){ 
-		int idx1, idx2, offset1, offset2;
+		int idx1, idx2;
 		
 		idx1 = Index(ndim, subscr1, dims1);	 /* calculate element Index from a subscript */
 		idx2 = Index(ndim, subscr2, dims2);
@@ -350,6 +270,7 @@ void scale_patch(double alpha, int ndim, double *patch1, int lo1[], int hi1[], i
 {
 	int i,j, elems=1;	
 	int subscr1[MAXDIMS];
+	int offset1 = 0;
 
 	for(i=0;i<ndim;i++){   /* count # of elements in patch */
 		int diff = hi1[i]-lo1[i];
@@ -360,7 +281,7 @@ void scale_patch(double alpha, int ndim, double *patch1, int lo1[], int hi1[], i
 
 	/* scale element values in both patches */ 
 	for(j=0; j< elems; j++){ 
-		int idx1, offset1;
+		int idx1;
 		
 		idx1 = Index(ndim, subscr1, dims1);	 /* calculate element Index from a subscript */
 
@@ -552,12 +473,13 @@ int proc;
 
 void test_nbdim()
 {
-int elems=1,elems1=1;
-int i,j, proc,ndim,rc;
-void *b[MAXDIMS+1][MAXPROC];
-void *a[MAXDIMS+1], *c[MAXDIMS+1];
-armci_hdl_t hdl_put[MAXDIMS+1],hdl_get[MAXDIMS+1];
-int idx1=0, idx2=0, idx3=0;
+    int elems=1,elems1=1;
+    int i,j, proc,ndim,rc;
+    void *b[MAXDIMS+1][MAXPROC];
+    void *a[MAXDIMS+1], *c[MAXDIMS+1];
+    armci_hdl_t hdl_put[MAXDIMS+1],hdl_get[MAXDIMS+1];
+    int idx1=0, idx2=0, idx3=0;
+
     /* create shared and local arrays */
     for(ndim=1;ndim<=MAXDIMS;ndim++){
        elems1*= dimsB[ndim-1];
@@ -615,7 +537,7 @@ int idx1=0, idx2=0, idx3=0;
                           strideB, count, ndim-1, proc,(hdl_put+ndim));
        }
     }
-sleep(5);
+    sleep(5);
     MP_BARRIER();
     /*before we do gets, we have to make sure puts are complete 
       on the remote processor*/
@@ -687,8 +609,8 @@ sleep(5);
 
 void verify_vector_data(double *data,int procs,int isput,int datalen)
 {
-double facto=2.89;
-int i,j=0,k=0,kc=0,dst=0;
+    double facto=2.89;
+    int i,j=0,k=0,kc=0,dst=0;
     if(isput)facto=1.89;
     for(i=0;i<datalen;i++){
        if(dst!=me)
@@ -1792,9 +1714,6 @@ int main(int argc, char* argv[])
 
     ARMCI_Init_args(&argc, &argv);
 
-/*
-       if(me==1)armci_die("process 1 committing suicide",1);
-*/
         if(me==0){
            printf("\nTesting strided gets and puts\n");
            printf("(Only std output for process 0 is printed)\n\n"); 

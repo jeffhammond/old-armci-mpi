@@ -136,6 +136,13 @@ int PARMCI_PutS(void *src_ptr, int src_stride_ar[/*stride_levels*/],
         MPI_Type_contiguous(size, MPI_BYTE, &src_type);
       }
     }
+    else {
+      /* Jeff: WIN_UNIFIED should allow overlap to work but we
+       *       do a memory barrier here to be safe. */
+      gmr_loc = gmr_lookup(src_ptr, ARMCI_GROUP_WORLD.rank);
+      if (gmr_loc != NULL)
+          gmr_sync(gmr_loc);
+    }
 
     /* NOGUARD: If src_buf hasn't been assigned to a copy, the strided source
      * buffer is going to be used directly. */
@@ -159,8 +166,9 @@ int PARMCI_PutS(void *src_ptr, int src_stride_ar[/*stride_levels*/],
     MPI_Type_free(&dst_type);
 
     /* COPY: Free temporary buffer */
-    if (src_buf != src_ptr)
+    if (src_buf != src_ptr) {
       MPI_Free_mem(src_buf);
+    }
 
     err = 0;
 
@@ -228,6 +236,13 @@ int PARMCI_GetS(void *src_ptr, int src_stride_ar[/*stride_levels*/],
 
         MPI_Type_contiguous(size, MPI_BYTE, &dst_type);
       }
+    }
+    else {
+      /* Jeff: WIN_UNIFIED should allow overlap to work but we
+       *       do a memory barrier here to be safe. */
+      gmr_loc = gmr_lookup(dst_ptr, ARMCI_GROUP_WORLD.rank);
+      if (gmr_loc != NULL)
+          gmr_sync(gmr_loc);
     }
 
     /* NOGUARD: If dst_buf hasn't been assigned to a copy, the strided source
@@ -311,6 +326,7 @@ int PARMCI_AccS(int datatype, void *scale,
     gmr_t *mreg, *gmr_loc = NULL;
     MPI_Datatype src_type, dst_type, mpi_datatype;
     int          scaled, mpi_datatype_size;
+    int          src_size, dst_size;
 
     ARMCII_Acc_type_translate(datatype, &mpi_datatype, &mpi_datatype_size);
     scaled = ARMCII_Buf_acc_is_scaled(datatype, scale);
@@ -359,6 +375,13 @@ int PARMCI_AccS(int datatype, void *scale,
         MPI_Type_contiguous(nelem, mpi_datatype, &src_type);
       }
     }
+    else {
+      /* Jeff: WIN_UNIFIED should allow overlap to work but we
+       *       do a memory barrier here to be safe. */
+      gmr_loc = gmr_lookup(src_ptr, ARMCI_GROUP_WORLD.rank);
+      if (gmr_loc != NULL)
+          gmr_sync(gmr_loc);
+    }
 
     /* NOGUARD: If src_buf hasn't been assigned to a copy, the strided source
      * buffer is going to be used directly. */
@@ -372,8 +395,6 @@ int PARMCI_AccS(int datatype, void *scale,
     MPI_Type_commit(&src_type);
     MPI_Type_commit(&dst_type);
 
-    int src_size, dst_size;
-
     MPI_Type_size(src_type, &src_size);
     MPI_Type_size(dst_type, &dst_size);
 
@@ -383,14 +404,15 @@ int PARMCI_AccS(int datatype, void *scale,
     ARMCII_Assert_msg(mreg != NULL, "Invalid shared pointer");
 
     gmr_accumulate_typed(mreg, src_buf, 1, src_type, dst_ptr, 1, dst_type, proc);
-    gmr_flush(mreg, proc, 0);
+    gmr_flush(mreg, proc, 1); /* flush_local */
 
     MPI_Type_free(&src_type);
     MPI_Type_free(&dst_type);
 
     /* COPY/SCALE: Free temp buffer */
-    if (src_buf != src_ptr)
+    if (src_buf != src_ptr) {
       MPI_Free_mem(src_buf);
+    }
 
     err = 0;
 
@@ -406,118 +428,6 @@ int PARMCI_AccS(int datatype, void *scale,
 
   return err;
 }
-
-
-/* -- begin weak symbols block -- */
-#if defined(HAVE_PRAGMA_WEAK)
-#  pragma weak ARMCI_NbPutS = PARMCI_NbPutS
-#elif defined(HAVE_PRAGMA_HP_SEC_DEF)
-#  pragma _HP_SECONDARY_DEF PARMCI_NbPutS ARMCI_NbPutS
-#elif defined(HAVE_PRAGMA_CRI_DUP)
-#  pragma _CRI duplicate ARMCI_NbPutS as PARMCI_NbPutS
-#endif
-/* -- end weak symbols block -- */
-
-/** Non-blocking operation that transfers data from the calling process to the
-  * memory of the remote process.  The data transfer is strided and blocking.
-  *
-  * @param[in] src_ptr         Source starting address of the data block to put.
-  * @param[in] src_stride_arr  Source array of stride distances in bytes.
-  * @param[in] dst_ptr         Destination starting address to put data.
-  * @param[in] dst_stride_ar   Destination array of stride distances in bytes.
-  * @param[in] count           Block size in each dimension. count[0] should be the
-  *                            number of bytes of contiguous data in leading dimension.
-  * @param[in] stride_levels   The level of strides.
-  * @param[in] proc            Remote process ID (destination).
-  *
-  * @return                    Zero on success, error code otherwise.
-  */
-int PARMCI_NbPutS(void *src_ptr, int src_stride_ar[/*stride_levels*/],
-               void *dst_ptr, int dst_stride_ar[/*stride_levels*/], 
-               int count[/*stride_levels+1*/], int stride_levels, int proc, armci_hdl_t *handle) {
-
-  /* TODO: implement nonblocking properly and then use it to get blocking */
-  if (handle!=NULL) {
-      handle->target = proc;
-  }
-  return PARMCI_PutS(src_ptr, src_stride_ar, dst_ptr, dst_stride_ar, count, stride_levels, proc);
-}
-
-
-/* -- begin weak symbols block -- */
-#if defined(HAVE_PRAGMA_WEAK)
-#  pragma weak ARMCI_NbGetS = PARMCI_NbGetS
-#elif defined(HAVE_PRAGMA_HP_SEC_DEF)
-#  pragma _HP_SECONDARY_DEF PARMCI_NbGetS ARMCI_NbGetS
-#elif defined(HAVE_PRAGMA_CRI_DUP)
-#  pragma _CRI duplicate ARMCI_NbGetS as PARMCI_NbGetS
-#endif
-/* -- end weak symbols block -- */
-
-/** Non-blocking operation that transfers data from the remote process to the
-  * memory of the calling process.  The data transfer is strided and blocking.
-  *
-  * @param[in] src_ptr         Source starting address of the data block to put.
-  * @param[in] src_stride_arr  Source array of stride distances in bytes.
-  * @param[in] dst_ptr         Destination starting address to put data.
-  * @param[in] dst_stride_ar   Destination array of stride distances in bytes.
-  * @param[in] count           Block size in each dimension. count[0] should be the
-  *                            number of bytes of contiguous data in leading dimension.
-  * @param[in] stride_levels   The level of strides.
-  * @param[in] proc            Remote process ID (destination).
-  *
-  * @return                    Zero on success, error code otherwise.
-  */
-int PARMCI_NbGetS(void *src_ptr, int src_stride_ar[/*stride_levels*/],
-               void *dst_ptr, int dst_stride_ar[/*stride_levels*/], 
-               int count[/*stride_levels+1*/], int stride_levels, int proc, armci_hdl_t *handle) {
-
-  /* TODO: implement nonblocking properly and then use it to get blocking */
-  if (handle!=NULL) {
-      handle->target = proc;
-  }
-  return PARMCI_GetS(src_ptr, src_stride_ar, dst_ptr, dst_stride_ar, count, stride_levels, proc);
-}
-
-
-/* -- begin weak symbols block -- */
-#if defined(HAVE_PRAGMA_WEAK)
-#  pragma weak ARMCI_NbAccS = PARMCI_NbAccS
-#elif defined(HAVE_PRAGMA_HP_SEC_DEF)
-#  pragma _HP_SECONDARY_DEF PARMCI_NbAccS ARMCI_NbAccS
-#elif defined(HAVE_PRAGMA_CRI_DUP)
-#  pragma _CRI duplicate ARMCI_NbAccS as PARMCI_NbAccS
-#endif
-/* -- end weak symbols block -- */
-
-/** Non-blocking operation that accumulates data from the local process into the
-  * memory of the remote process.  The data transfer is strided and blocking.
-  *
-  * @param[in] datatype        Type of data to be transferred.
-  * @param[in] scale           Pointer to the value that input data should be scaled by.
-  * @param[in] src_ptr         Source starting address of the data block to put.
-  * @param[in] src_stride_arr  Source array of stride distances in bytes.
-  * @param[in] dst_ptr         Destination starting address to put data.
-  * @param[in] dst_stride_ar   Destination array of stride distances in bytes.
-  * @param[in] count           Block size in each dimension. count[0] should be the
-  *                            number of bytes of contiguous data in leading dimension.
-  * @param[in] stride_levels   The level of strides.
-  * @param[in] proc            Remote process ID (destination).
-  *
-  * @return                    Zero on success, error code otherwise.
-  */
-int PARMCI_NbAccS(int datatype, void *scale,
-               void *src_ptr, int src_stride_ar[/*stride_levels*/],
-               void *dst_ptr, int dst_stride_ar[/*stride_levels*/],
-               int count[/*stride_levels+1*/], int stride_levels, int proc, armci_hdl_t *handle) {
-
-  /* TODO: implement nonblocking properly and then use it to get blocking */
-  if (handle!=NULL) {
-      handle->target = proc;
-  }
-  return PARMCI_AccS(datatype, scale, src_ptr, src_stride_ar, dst_ptr, dst_stride_ar, count, stride_levels, proc);
-}
-
 
 /** Translate a strided operation into a more general IO Vector.
   *
@@ -748,6 +658,8 @@ int PARMCI_PutS_flag(void *src_ptr, int src_stride_ar[/*stride_levels*/],
                  int count[/*stride_levels+1*/], int stride_levels, 
                  int *flag, int value, int proc) {
 
+  /* TODO: This can be optimized with a more direct implementation, especially in the
+   *       case where RMA is ordered; in that case, the Fence (Flush) is not necessary. */
   PARMCI_PutS(src_ptr, src_stride_ar, dst_ptr, dst_stride_ar, count, stride_levels, proc);
   PARMCI_Fence(proc);
   PARMCI_Put(&value, flag, sizeof(int), proc);

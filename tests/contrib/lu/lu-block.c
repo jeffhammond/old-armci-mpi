@@ -4,10 +4,20 @@
  *             Block distribution                 *
  **************************************************/
 
-#   include <stdio.h>
-#   include <math.h>
-#   include <stdlib.h>
-#   include <unistd.h>
+#include <stdio.h>
+
+/* per http://linux.die.net/man/3/srand48,
+ * _XOPEN_SOURCE (or _SVID_SOURCE) is required
+ * for srand48. */
+#ifndef _XOPEN_SOURCE
+#define _XOPEN_SOURCE
+#endif
+#include <stdlib.h>
+
+#include <math.h>
+
+#include <unistd.h>
+#include <getopt.h> /* required with C99 */
 
 #include "mp3.h"
 #include <armci.h>
@@ -38,9 +48,9 @@ void bmodd(double *, double*, int, int, int, int);
 void bmod(double *, double *, double *, int, int, int, int, int, int);
 void daxpy(double *, double *, int, double);
 int block_owner(int, int);
-void init_array();
+void init_array(void);
 double touch_array(int, int);
-void print_block();
+void print_block(void);
 void print_array(int);
 void get_remote(double *, int, int);
 
@@ -350,7 +360,6 @@ void lu0(double *a, int n, int stride)
 {
     int j; 
     int k; 
-    int length;
     double alpha;
     
     for (k=0; k<n; k++) {
@@ -358,7 +367,6 @@ void lu0(double *a, int n, int stride)
         for (j=k+1; j<n; j++) {
             a[k+j*stride] /= a[k+k*stride];
             alpha = -a[k+j*stride];
-            length = n-k-1;
             daxpy(&a[k+1+j*stride], &a[k+1+k*stride], n-k-1, alpha);
         }
     }
@@ -384,14 +392,12 @@ void bmodd(double *a, double *c, int dimi, int dimj,
 {
     int j; 
     int k; 
-    int length;
     double alpha;
     
     for (k=0; k<dimi; k++) {
         for (j=0; j<dimj; j++) {
             c[k+j*stride_c] /= a[k+k*stride_a];
             alpha = -c[k+j*stride_c];
-            length = dimi - k - 1;
             daxpy(&c[k+1+j*stride_c], &a[k+1+k*stride_a], dimi-k-1, alpha);
         }
     }
@@ -427,7 +433,7 @@ int block_owner(int I, int J)
     return((I+J*nblocks)/num);
 }
 
-void init_array()
+void init_array(void)
 {
     int i, j;
     int ii, jj;
@@ -557,7 +563,7 @@ void print_array(int myid)
     free(buf);
 }
 
-void print_block()
+void print_block(void)
 {
     int i, j, k;
 

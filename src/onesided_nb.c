@@ -12,7 +12,12 @@
 /** Initialize Non-blocking handle.
   */
 void ARMCI_INIT_HANDLE(armci_hdl_t *handle) {
-  handle->target = -1;
+  if (handle!=NULL) {
+    handle->aggregate =  1;
+    handle->target    = -1;
+  } else {
+    ARMCII_Warning("ARMCI_INIT_HANDLE given NULL handle");
+  }
   return;
 }
 
@@ -20,7 +25,11 @@ void ARMCI_INIT_HANDLE(armci_hdl_t *handle) {
 /** Mark a handle as aggregate.
   */
 void ARMCI_SET_AGGREGATE_HANDLE(armci_hdl_t *handle) {
-  handle->target = -1;
+  if (handle!=NULL) {
+    handle->aggregate =  1;
+  } else {
+    ARMCII_Warning("ARMCI_INIT_HANDLE given NULL handle");
+  }
   return;
 }
 
@@ -28,7 +37,11 @@ void ARMCI_SET_AGGREGATE_HANDLE(armci_hdl_t *handle) {
 /** Clear an aggregate handle.
   */
 void ARMCI_UNSET_AGGREGATE_HANDLE(armci_hdl_t *handle) {
-  handle->target = -1;
+  if (handle!=NULL) {
+    handle->aggregate =  0;
+  } else {
+    ARMCII_Warning("ARMCI_INIT_HANDLE given NULL handle");
+  }
   return;
 }
 
@@ -43,7 +56,7 @@ void ARMCI_UNSET_AGGREGATE_HANDLE(armci_hdl_t *handle) {
 #endif
 /* -- end weak symbols block -- */
 
-/** Non-blocking put operation.  Note: the implementation is not non-blocking
+/** Non-blocking put operation.
   */
 int PARMCI_NbPut(void *src, void *dst, int size, int target, armci_hdl_t *handle) {
   gmr_t *src_mreg, *dst_mreg;
@@ -63,8 +76,15 @@ int PARMCI_NbPut(void *src, void *dst, int size, int target, armci_hdl_t *handle
       ARMCI_Copy(src, dst, size);
   }
   else {
-      gmr_iput(dst_mreg, src, dst, size, target);
+      gmr_put(dst_mreg, src, dst, size, target);
   }
+
+  if (handle!=NULL) {
+      /* Regular (not aggregate) handles merely store the target for future flushing. */
+      handle->target = target;
+  }
+
+  gmr_progress();
 
   return 0;
 }
@@ -100,8 +120,15 @@ int PARMCI_NbGet(void *src, void *dst, int size, int target, armci_hdl_t *handle
     ARMCI_Copy(src, dst, size);
   }
   else {
-    gmr_iget(src_mreg, src, dst, size, target);
+    gmr_get(src_mreg, src, dst, size, target);
   }
+
+  if (handle!=NULL) {
+      /* Regular (not aggregate) handles merely store the target for future flushing. */
+      handle->target = target;
+  }
+
+  gmr_progress();
 
   return 0;
 }
@@ -119,7 +146,7 @@ int PARMCI_NbGet(void *src, void *dst, int size, int target, armci_hdl_t *handle
 
 /** Non-blocking accumulate operation.  Note: the implementation is not non-blocking
   */
-int PARMCI_NbAcc(int datatype, void *scale, void *src, void *dst, int bytes, int proc, armci_hdl_t *handle) {
+int PARMCI_NbAcc(int datatype, void *scale, void *src, void *dst, int bytes, int target, armci_hdl_t *handle) {
   void  *src_buf;
   int    count, type_size, scaled;
   MPI_Datatype type;
@@ -131,7 +158,7 @@ int PARMCI_NbAcc(int datatype, void *scale, void *src, void *dst, int bytes, int
   else
     src_mreg = NULL;
 
-  dst_mreg = gmr_lookup(dst, proc);
+  dst_mreg = gmr_lookup(dst, target);
 
   ARMCII_Assert_msg(dst_mreg != NULL, "Invalid remote pointer");
 
@@ -165,13 +192,20 @@ int PARMCI_NbAcc(int datatype, void *scale, void *src, void *dst, int bytes, int
 
   /* TODO: Support a local accumulate operation more efficiently */
 
-  gmr_iaccumulate(dst_mreg, src_buf, dst, count, type, proc);
+  gmr_accumulate(dst_mreg, src_buf, dst, count, type, target);
 
   if (src_buf != src) {
     /* must wait for local completion to free source buffer */
-    gmr_flush(dst_mreg, proc, 1); /* flush local only, unlike Fence */
+    gmr_flush(dst_mreg, target, 1); /* flush local only, unlike Fence */
     MPI_Free_mem(src_buf);
   }
+
+  if (handle!=NULL) {
+      /* Regular (not aggregate) handles merely store the target for future flushing. */
+      handle->target = target;
+  }
+
+  gmr_progress();
 
   return 0;
 }
@@ -191,17 +225,17 @@ int PARMCI_NbAcc(int datatype, void *scale, void *src, void *dst, int bytes, int
   */
 int PARMCI_Wait(armci_hdl_t* handle) {
   gmr_t *cur_mreg = gmr_list;
-  int proc = handle->target;
 
-  if(proc == -1) {
+  if(handle->aggregate > 0) {
     while (cur_mreg) {
-      gmr_flushall(cur_mreg, 1);
+      gmr_flushall(cur_mreg, 1); /* local only */
       cur_mreg = cur_mreg->next;
     }
   }
   else {
+    int proc = handle->target;
     while (cur_mreg) {
-      gmr_flush(cur_mreg, proc, 1);
+      gmr_flush(cur_mreg, proc, 1); /* local only */
       cur_mreg = cur_mreg->next;
     }
   }
@@ -242,7 +276,7 @@ int PARMCI_WaitProc(int proc) {
   gmr_t *cur_mreg = gmr_list;
 
   while (cur_mreg) {
-    gmr_flush(cur_mreg, proc, 1);
+    gmr_flush(cur_mreg, proc, 1); /* local only */
     cur_mreg = cur_mreg->next;
   }
   return 0;
@@ -265,7 +299,7 @@ int PARMCI_WaitAll(void) {
   gmr_t *cur_mreg = gmr_list;
 
   while (cur_mreg) {
-    gmr_flushall(cur_mreg, 1); /* flush local only, unlike Fence */
+    gmr_flushall(cur_mreg, 1); /* local only */
     cur_mreg = cur_mreg->next;
   }
   return 0;

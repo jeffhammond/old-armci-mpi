@@ -7,17 +7,19 @@
 #include <string.h>
 #include <mpi.h>
 
+#include <pthread.h>
+
 #include <armci.h>
 #include <armcix.h>
 #include <armci_internals.h>
 #include <debug.h>
 #include <gmr.h>
 
-
 /** Linked list of shared memory regions.
   */
 gmr_t *gmr_list = NULL;
 
+static pthread_mutex_t gmr_list_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 /** Create a distributed shared memory region. Collective on ARMCI group.
   *
@@ -64,31 +66,43 @@ gmr_t *gmr_create(gmr_size_t local_size, void **base_ptrs, ARMCI_Group *group) {
   /* Allocate my slice of the GMR */
   alloc_slices[alloc_me].size = local_size;
 
-#if USE_WIN_CREATE
-  if (local_size == 0) {
-    alloc_slices[alloc_me].base = NULL;
-  } else {
-    /* http://mvapich.cse.ohio-state.edu/support/user_guide_mvapich2-2.0a.html#x1-600006.7 */
-    MPI_Info win_info;
-    MPI_Info_create(&win_info); 
-    MPI_Info_set(win_info, "alloc_shm", "true"); 
-
-    MPI_Alloc_mem(local_size, win_info, &(alloc_slices[alloc_me].base));
-    ARMCII_Assert(alloc_slices[alloc_me].base != NULL);
-
-    MPI_Info_free(&win_info);
+  MPI_Info alloc_shm_info = MPI_INFO_NULL;
+  if (ARMCII_GLOBAL_STATE.use_alloc_shm) {
+      MPI_Info_create(&alloc_shm_info);
+      MPI_Info_set(alloc_shm_info, "alloc_shm", "true");
+  } else /* no alloc_shm */ {
+      alloc_shm_info = MPI_INFO_NULL;
   }
-  MPI_Win_create(alloc_slices[alloc_me].base, (MPI_Aint) local_size, 1, MPI_INFO_NULL, group->comm, &mreg->window);
-#else
-  MPI_Win_allocate( (MPI_Aint) local_size, 1, MPI_INFO_NULL, group->comm, &(alloc_slices[alloc_me].base), &mreg->window);
 
-  if (local_size == 0) {
-    /* TODO: Is this necessary?  Is it a good idea anymore? */
-    alloc_slices[alloc_me].base = NULL;
-  } else {
-    ARMCII_Assert(alloc_slices[alloc_me].base != NULL);
+  if (ARMCII_GLOBAL_STATE.use_win_allocate) {
+
+      /* give hint to CASPER to avoid extra work for lock permission */
+      if (alloc_shm_info == MPI_INFO_NULL)
+          MPI_Info_create(&alloc_shm_info);
+      MPI_Info_set(alloc_shm_info, "epochs_used", "lockall");
+
+      MPI_Win_allocate( (MPI_Aint) local_size, 1, alloc_shm_info, group->comm, &(alloc_slices[alloc_me].base), &mreg->window);
+
+      if (local_size == 0) {
+        /* TODO: Is this necessary?  Is it a good idea anymore? */
+        alloc_slices[alloc_me].base = NULL;
+      } else {
+        ARMCII_Assert(alloc_slices[alloc_me].base != NULL);
+      }
+  } else /* use win create */ {
+      if (local_size == 0) {
+        alloc_slices[alloc_me].base = NULL;
+      } else {
+        MPI_Alloc_mem(local_size, alloc_shm_info, &(alloc_slices[alloc_me].base));
+        ARMCII_Assert(alloc_slices[alloc_me].base != NULL);
+      }
+      MPI_Win_create(alloc_slices[alloc_me].base, (MPI_Aint) local_size, 1, MPI_INFO_NULL, group->comm, &mreg->window);
+
+  } /* win allocate/create */
+
+  if (alloc_shm_info != MPI_INFO_NULL) {
+      MPI_Info_free(&alloc_shm_info);
   }
-#endif
 
   /* Debugging: Zero out shared memory if enabled */
   if (ARMCII_GLOBAL_STATE.debug_alloc && local_size > 0) {
@@ -109,6 +123,7 @@ gmr_t *gmr_create(gmr_size_t local_size, void **base_ptrs, ARMCI_Group *group) {
   if (aggregate_size == 0) {
     free(alloc_slices);
     free(mreg->slices);
+    MPI_Win_free(&mreg->window);
     free(mreg);
 
     for (i = 0; i < alloc_nproc; i++)
@@ -138,9 +153,11 @@ gmr_t *gmr_create(gmr_size_t local_size, void **base_ptrs, ARMCI_Group *group) {
   MPI_Group_free(&world_group);
   MPI_Group_free(&alloc_group);
 
-  MPI_Win_lock_all(MPI_MODE_NOCHECK, mreg->window);
+  MPI_Win_lock_all((ARMCII_GLOBAL_STATE.rma_nocheck) ? MPI_MODE_NOCHECK : 0,
+                   mreg->window);
 
   {
+    int unified;
     void    *attr_ptr;
     int     *attr_val;
     int      attr_flag;
@@ -151,19 +168,34 @@ gmr_t *gmr_create(gmr_size_t local_size, void **base_ptrs, ARMCI_Group *group) {
       if (world_me==0) {
         if ( (*attr_val)==MPI_WIN_SEPARATE ) {
           printf("MPI_WIN_MODEL = MPI_WIN_SEPARATE \n" );
+          unified = 0;
         } else if ( (*attr_val)==MPI_WIN_UNIFIED ) {
-#if DEBUG
+#ifdef DEBUG
           printf("MPI_WIN_MODEL = MPI_WIN_UNIFIED \n" );
 #endif
+          unified = 1;
         } else {
           printf("MPI_WIN_MODEL = %d (not UNIFIED or SEPARATE) \n", *attr_val );
+          unified = 0;
         }
       }
     } else {
-      if (world_me==0)
+      if (world_me==0) {
         printf("MPI_WIN_MODEL attribute missing \n");
+        unified = 0;
+      }
+    }
+    if (!unified && (ARMCII_GLOBAL_STATE.shr_buf_method == ARMCII_SHR_BUF_NOGUARD) ) {
+      if (world_me==0) {
+        printf("Please re-run with ARMCI_SHR_BUF_METHOD=COPY\n");
+      }
+      /* ARMCI_Error("MPI_WIN_SEPARATE with NOGUARD", 1); */
     }
   }
+
+  int ptrc;
+  ptrc = pthread_mutex_lock(&gmr_list_mutex);
+  ARMCII_Assert(ptrc == 0);
 
   /* Append the new region onto the region list */
   if (gmr_list == NULL) {
@@ -178,6 +210,9 @@ gmr_t *gmr_create(gmr_size_t local_size, void **base_ptrs, ARMCI_Group *group) {
     parent->next = mreg;
     mreg->prev   = parent;
   }
+
+  ptrc = pthread_mutex_unlock(&gmr_list_mutex);
+  ARMCII_Assert(ptrc == 0);
 
   return mreg;
 }
@@ -232,6 +267,10 @@ void gmr_destroy(gmr_t *mreg, ARMCI_Group *group) {
   /* If it's still not found, the user may have passed the wrong group */
   ARMCII_Assert_msg(mreg != NULL, "Could not locate the desired allocation");
 
+  int ptrc;
+  ptrc = pthread_mutex_lock(&gmr_list_mutex);
+  ARMCII_Assert(ptrc == 0);
+
   /* Remove from the list of mem regions */
   if (mreg->prev == NULL) {
     ARMCII_Assert(gmr_list == mreg);
@@ -246,16 +285,20 @@ void gmr_destroy(gmr_t *mreg, ARMCI_Group *group) {
       mreg->next->prev = mreg->prev;
   }
 
+  ptrc = pthread_mutex_unlock(&gmr_list_mutex);
+  ARMCII_Assert(ptrc == 0);
+
   ARMCII_Assert_msg(mreg->window != MPI_WIN_NULL, "A non-null mreg contains a null window.");
   MPI_Win_unlock_all(mreg->window);
 
   /* Destroy the window and free all buffers */
   MPI_Win_free(&mreg->window);
 
-#if USE_WIN_CREATE
-  if (mreg->slices[world_me].base != NULL)
-    MPI_Free_mem(mreg->slices[world_me].base);
-#endif
+  if (!ARMCII_GLOBAL_STATE.use_win_allocate) {
+    if (mreg->slices[world_me].base != NULL) {
+      MPI_Free_mem(mreg->slices[world_me].base);
+    }
+  }
 
   free(mreg->slices);
   free(mreg);
@@ -357,11 +400,13 @@ int gmr_put_typed(gmr_t *mreg, void *src, int src_count, MPI_Datatype src_type,
   ARMCII_Assert_msg(disp >= 0 && disp < mreg->slices[proc].size, "Invalid remote address");
   ARMCII_Assert_msg(disp + dst_count*extent <= mreg->slices[proc].size, "Transfer is out of range");
 
-#ifdef RMA_PROPER_ATOMICITY
-  MPI_Accumulate(src, src_count, src_type, grp_proc, (MPI_Aint) disp, dst_count, dst_type, MPI_REPLACE, mreg->window);
-#else
-  MPI_Put(src, src_count, src_type, grp_proc, (MPI_Aint) disp, dst_count, dst_type, mreg->window);
-#endif
+  if (ARMCII_GLOBAL_STATE.rma_atomicity) {
+      MPI_Accumulate(src, src_count, src_type, grp_proc,
+                     (MPI_Aint) disp, dst_count, dst_type, MPI_REPLACE, mreg->window);
+  } else {
+      MPI_Put(src, src_count, src_type, grp_proc,
+              (MPI_Aint) disp, dst_count, dst_type, mreg->window);
+  }
 
   return 0;
 }
@@ -417,11 +462,13 @@ int gmr_get_typed(gmr_t *mreg, void *src, int src_count, MPI_Datatype src_type,
   ARMCII_Assert_msg(disp >= 0 && disp < mreg->slices[proc].size, "Invalid remote address");
   ARMCII_Assert_msg(disp + src_count*extent <= mreg->slices[proc].size, "Transfer is out of range");
 
-#ifdef RMA_PROPER_ATOMICITY
-  MPI_Get_accumulate(NULL, 0, MPI_BYTE, dst, dst_count, dst_type, grp_proc, (MPI_Aint) disp, src_count, src_type, MPI_NO_OP, mreg->window);
-#else
-  MPI_Get(dst, dst_count, dst_type, grp_proc, (MPI_Aint) disp, src_count, src_type, mreg->window);
-#endif
+  if (ARMCII_GLOBAL_STATE.rma_atomicity) {
+      MPI_Get_accumulate(NULL, 0, MPI_BYTE, dst, dst_count, dst_type, grp_proc,
+                         (MPI_Aint) disp, src_count, src_type, MPI_NO_OP, mreg->window);
+  } else {
+      MPI_Get(dst, dst_count, dst_type, grp_proc,
+              (MPI_Aint) disp, src_count, src_type, mreg->window);
+  }
 
   return 0;
 }
